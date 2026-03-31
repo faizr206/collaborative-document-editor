@@ -1,0 +1,713 @@
+make a complete guidelines markdown on how to built, structure, and work on the app. fill the information that hasnt been added in the markdown on your own. the target is so that other people or agents can read the markdown and understand what are all of the functionality, structure, etc. make it as complete as possible
+Part 1: Requirements Engineering
+1.1 Stakeholder Analysis
+Although the main users of the system are people who use the software and collaborate on documents, the platform affects many other stakeholders throughout its lifecycle. Since this project involves real-time collaboration, AI integration, authentication, and document management, it is important to consider stakeholders beyond just the end users. Below are four key stakeholder groups and how they influence the system’s design.
+DevOps and Operations Engineers
+These are the people responsible for deploying, running, and maintaining the system once it is built. Their main concern is making sure the platform is stable, scalable, and reliable.
+
+Goals
+Keep the system available and responsive.
+Ensure the system can scale as more users join.
+Monitor performance and detect issues quickly.
+Support smooth deployments and rollbacks.
+Concerns
+Real-time collaboration can be complex and resource-intensive.
+AI services may fail or respond slowly.
+Data loss during crashes or outages.
+Secure storage of API keys and credentials.
+Impact on the System
+Because of them, we need clear monitoring, logging, and backup strategies. The architecture must support horizontal scaling and graceful degradation. For example, if the AI service goes down, document editing should still work as normal. Their needs strongly influence our non-functional requirements such as availability, scalability, and reliability.
+Security and Compliance Stakeholders
+This group includes security engineers and anyone responsible for privacy and regulatory compliance. Since documents may contain sensitive information and AI services process user content, security is a major concern.
+
+Goals
+Protect document data from unauthorized access.
+Ensure secure authentication and authorization.
+Prevent data leaks when communicating with third-party AI providers.
+Maintain user trust.
+Concerns
+Sending document content to external LLM APIs.
+Encrypting data both in transit and at rest.
+Proper role-based access control (owner, editor, viewer, etc.).
+Logging and storing AI interaction history securely.
+Impact on the System
+Their concerns require strong authentication and authorization mechanisms, encrypted communication, and clear policies on what content is shared with AI services. They also influence how permissions are modeled and how version history and audit logs are handled.
+External AI Service Providers
+Since AI functionality is a core feature of the platform, we rely heavily on third-party large language model (LLM) providers to power capabilities for our software, such as rewriting, summarization, translation, and restructuring. Thus, these providers directly impact the quality, performance, and cost of our platform.
+Goals
+Ensure proper API usage within rate limits and token limits.
+Maintain stable integration through well-defined contracts.
+Concerns
+Rate limiting and quota restrictions.
+Token limits for long documents.
+Latency variability.
+Model changes or pricing updates.
+Impact on the System
+This dependency forces us to carefully design the AI integration. AI requests may need to be asynchronous, and the system must handle cases where responses are delayed or fail. We also need abstraction layers so we are not tightly coupled to one provider. Cost management strategies (such as user usage limits) are also influenced by this stakeholder.
+Product Owners and Business Stakeholders
+This group includes founders, product managers, and investors who care about the platform's long-term success.
+Goals
+Deliver a competitive collaborative editor with strong AI features.
+Attract and retain users.
+Control operational costs, especially AI-related expenses.
+Define a sustainable monetization model.
+Concerns
+High API costs from frequent AI usage.
+Scalability as the user base grows.
+Balancing feature richness with usability.
+Time-to-market constraints.
+Impact on the System
+Business stakeholders influence feature prioritization, pricing strategies, and cost-control mechanisms such as AI quotas or tier-based access. They also impact architectural decisions that affect scalability and long-term maintainability.
+1.2 Functional Requirements
+Capability Area 1: Real-Time Collaboration
+Requirement ID
+Definition
+FR-COL-01: Simultaneous Editing
+Description: The system shall support concurrent editing of the same document by multiple users.
+Trigger: Two or more authenticated users open the same document.
+Expected Behavior: Edits made by any user are propagated to all other connected users in near real time.
+Acceptance Criteria:
+Text updates appear to other users within 500 milliseconds under normal load.
+No manual refresh is required.
+FR-COL-02: Presence Awareness
+Description: The system shall display active collaborators, optionally along with their cursor positions.
+Trigger: A user joins an active document session.
+Expected Behavior: The user list updates dynamically and displays participant presence.
+Acceptance Criteria:
+Active participants are visible to all users in the session.
+Cursor positions are visually distinguishable.
+FR-COL-03: Conflict Resolution
+Description: The system shall prevent data loss during simultaneous edits to overlapping text regions.
+Trigger: Two users edit overlapping sections at the same time.
+Expected Behavior: A defined conflict-resolution strategy merges updates without silently overwriting text.
+Acceptance Criteria:
+No user’s input is permanently lost.
+Conflicting edits are handled consistently and predictably.
+FR-COL-04: Document State Synchronization on Join
+Description: The system shall synchronize the complete current document state when a user joins an active editing session.
+Trigger: A user opens a document that is currently being edited by others.
+Expected Behavior: The user receives the latest consistent document state before sending or receiving incremental updates.
+Acceptance Criteria:
+The loaded document matches the authoritative server state.
+No partial or inconsistent content is displayed.
+The user can begin editing immediately after synchronization.
+FR-COL-05: Reconnection Handling
+Description: The system shall handle temporary client disconnections without permanent data loss.
+Trigger: A user loses network connectivity during editing.
+Expected Behavior:
+Local edits are buffered.
+Upon reconnection, the client resynchronizes with the server.
+Conflicts are resolved using the defined merge strategy.
+
+
+Acceptance Criteria:
+No confirmed edits are permanently lost.
+The user is notified of the reconnection status.
+Document state becomes consistent after reconnection.
+FR-COL-06: Edit Attribution
+Description: The system shall associate document changes with the user who made them.
+Trigger: A user submits/does an edit operation.
+Expected Behavior: The system records the author of each change for potential display or version tracking.
+Acceptance Criteria:
+Changes can be traced to a specific user.
+Attribution data is available to version history or UI components.
+FR-COL-07: Overlapping Edit Feedback
+Description: The system shall provide visual feedback when multiple users edit the same region.
+Acceptance Criteria:
+Overlapping edits are visually indicated.
+Users are not silently overridden.
+
+
+Capability Area 2: AI Writing Assistant
+Requirement ID
+Definition
+FR-AI-01: AI Invocation
+Description: The system shall allow users to request AI assistance on selected text.
+Trigger: A user selects text and chooses an AI action (e.g., summarize, rewrite, translate).
+Expected Behavior: The selected text and request type are sent to the backend AI service.
+Acceptance Criteria:
+The AI request is initiated without reloading the page.
+The system displays a loading indicator.
+FR-AI-02: Suggestion Presentation
+Description: The system shall present AI-generated suggestions in a non-destructive manner.
+Trigger: The AI returns a response.
+Expected Behavior: The suggestion appears as a preview (e.g., side panel or tracked-change style).
+Acceptance Criteria:
+The original text remains unchanged until the user explicitly accepts the suggestion.
+The user can accept or reject the suggestion.
+FR-AI-03: Partial Acceptance
+Description: The system shall allow users to partially edit or modify AI-generated suggestions before applying them.
+Trigger: The user edits the AI-proposed output before acceptance.
+Expected Behavior: The system treats the edited suggestion as user-generated content upon approval.
+Acceptance Criteria:
+Modified suggestions replace only selected text.
+The action is reversible via undo functionality.
+FR-AI-04: Context Scope
+Description: The system shall limit the text sent to the AI service to the user-selected text and, optionally, a predefined surrounding context window (e.g., the same paragraph), without including the entire document unless explicitly required by the feature.
+Trigger: A user selects text and invokes an AI action (e.g., summarize, rewrite, translate).
+Expected Behavior:
+The backend constructs an AI request containing:
+The selected text.
+Only the configured contextual window (if applicable).
+The requested AI action type.
+No unrelated document content is included in the request payload.
+Acceptance Criteria:
+The AI request payload contains only the selected text plus the allowed context window.
+Content outside the defined scope is never transmitted to the AI service.
+For large documents, request size remains within predefined limits (e.g., max token threshold).
+Scope behavior is consistent across all AI features.
+FR-AI-05: AI Failure Handling
+Description: The system shall gracefully handle AI request failures, including timeouts, service unavailability, or API errors, without modifying the document.
+Trigger: An AI request times out, returns an error response, or the AI service is unavailable.
+Expected Behavior:
+The system displays a clear and user-friendly error message.
+The original document content remains unchanged.
+The user is given the option to retry the request.
+Acceptance Criteria:
+No document content is altered when an AI request fails.
+An error notification is displayed within 2 seconds of failure detection.
+A retry option is available without requiring page reload.
+The failure is logged for monitoring purposes.
+FR-AI-06: AI Suggestion vs Concurrent Edits
+Description: The system shall detect changes to the selected text that occur while an AI request is being processed and prevent automatic application of outdated suggestions.
+Trigger: A user invokes AI on selected text, and the selected region is modified (by the same user or another collaborator) before the AI response is returned.
+Expected Behavior:
+The system compares the current text with the original text used in the AI request.
+If a mismatch is detected, the system prompts the user with options:
+Re-run the AI on the updated text
+Apply the suggestion anyway
+Discard the suggestion
+Acceptance Criteria:
+AI suggestions are never silently applied to modified text.
+A mismatch detection mechanism prevents automatic overwriting.
+The user must explicitly confirm before applying a potentially outdated suggestion.
+No collaborator’s edits are overwritten without confirmation.
+FR-AI-07: AI Interaction Record
+Description: The system shall record metadata for each AI interaction to support traceability and future reference.
+Trigger: An AI suggestion is generated, accepted, rejected, or modified.
+Expected Behavior:
+ The system stores metadata including:
+AI feature type (e.g., summarize, rewrite)
+Timestamp
+Reference to the affected text segment (e.g., anchor or hash)
+Outcome status (accepted, rejected, partially applied)
+Acceptance Criteria:
+AI interactions are stored and linked to the corresponding document.
+Users can view a list of past AI interactions for a document.
+Each record includes feature type, timestamp, and outcome status.
+Stored metadata does not include unnecessary full-document content.
+FR-AI-08: AI Permission Enforcement
+Description: The system shall enforce role-based permissions for invoking AI features within a document.
+Trigger: A user attempts to invoke an AI feature.
+Expected Behavior:
+The system verifies the user’s role for the document.
+Users with insufficient permissions (e.g., viewers) are prevented from invoking AI features.
+Authorized users (e.g., editors, owners) may invoke AI normally.
+Acceptance Criteria:
+Users with a viewer role cannot initiate AI requests.
+The AI action controls are disabled or hidden for unauthorized users.
+If an unauthorized request is attempted via API manipulation, the backend rejects it with an appropriate error response.
+Authorized roles can invoke AI without restriction.
+
+
+Capability Area 3: Document Management
+Requirement ID
+Definition
+FR-DOC-01: Document Creation and Saving
+Description: The system shall allow authenticated users to create and persist new documents.
+Trigger: A user selects “Create Document.”
+Expected Behavior: A new document instance is stored in the database.
+Acceptance Criteria:
+The document has a unique ID.
+The document persists after logout and relogin.
+FR-DOC-02: Version History
+Description: The system shall maintain a version history of document changes.
+Trigger: The user requests version history.
+Expected Behavior: The system displays a chronological list of saved states.
+Acceptance Criteria:
+Users can view at least the last 20 versions.
+Users can revert to a previous version.
+FR-DOC-03: Sharing and Access Control
+Description: The system shall allow document owners to share documents with specific roles.
+Trigger: The owner configures sharing settings.
+Expected Behavior: Permissions are enforced according to assigned roles (owner, editor, viewer).
+Acceptance Criteria:
+Viewers cannot modify content.
+Editors can modify but not change permissions.
+FR-DOC-04: Document Listing and Retrieval
+Description: The system shall allow authenticated users to view and open documents they have permission to access.
+Trigger: A user navigates to the document dashboard or selects a document from the list.
+Expected Behavior: The system retrieves and displays a list of documents accessible to the user. When a document is selected, the latest version is loaded into the editor.
+Acceptance Criteria:
+Users can see a list of documents they own or that have been shared with them.
+Users cannot see documents they do not have permission to access.
+Opening a document loads the most recent saved version.
+Document content loads within defined latency requirements.
+FR-DOC-05: Document Export
+Description: The system shall allow users with appropriate permissions to export a document to supported file formats.
+Trigger: A user selects the “Export” option and chooses a format (e.g., PDF, DOCX, plain text).
+Expected Behavior: The system generates a downloadable file representing the current document state.
+Acceptance Criteria:
+The exported file reflects the current saved content of the document.
+Exported formatting is preserved as accurately as possible within the chosen format.
+Users without edit or view permission cannot export the document.
+The export process completes without altering the original document.
+FR-DOC-06: Link-Based Sharing
+Description: The system shall allow document owners to generate shareable links with predefined access roles.
+Trigger: The owner selects “Generate Share Link” and assigns a role (e.g., viewer, editor).
+Expected Behavior: The system creates a unique access link associated with the document and the specified permission level.
+Acceptance Criteria:
+The generated link grants access according to the assigned role.
+Users accessing the link must authenticate before gaining access (unless explicitly designed otherwise).
+The owner can disable the link at any time.
+Disabled links immediately prevent further access.
+FR-DOC-07: Access Revocation
+Description:The system shall allow document owners to revoke previously granted access from specific users or shared links.
+Trigger: The owner removes a user or disables a sharing link from the sharing settings.
+Expected Behavior: The system updates access control rules and immediately prevents the revoked party from accessing the document.
+Acceptance Criteria:
+Revoked users can no longer open or edit the document.
+Previously generated links no longer grant access once disabled.
+The document no longer appears in the revoked user’s document list.
+Revocation changes take effect without requiring a system restart.
+
+
+Capability Area 4: User Management
+Requirement ID
+Definition
+FR-USER-01: Authentication
+Description: Users must authenticate before accessing documents.
+Trigger: User attempts to access a resource.
+Expected Behavior: System verifies credentials before granting access.
+Acceptance Criteria:
+Unauthorized users cannot access any documents.
+Sessions expire after a defined inactivity period.
+FR-USER-02: Role-Based Authorization
+
+
+Description: The system shall enforce permissions based on user roles.
+Trigger: A user attempts an action (edit, share, invoke AI).
+Expected Behavior: The system checks permissions before executing the action.
+Acceptance Criteria:
+Unauthorized actions are blocked with a clear message.
+Role changes take effect immediately.
+FR-USER-03: User Registration
+Description: The system shall allow new users to create an account in order to access document features.
+Trigger: A user selects “Sign Up” and submits required registration information (e.g., email and password).
+Expected Behavior: The system validates the provided information, creates a new user account, and establishes an authenticated session upon successful registration.
+Acceptance Criteria:
+Users cannot register with an already existing email address.
+Passwords meet defined security requirements.
+A new user record is created in persistent storage.
+The user is authenticated immediately after successful registration.
+FR-USER-04: Logout and Session Termination
+Description: The system shall allow authenticated users to log out and immediately terminate their active session.
+Trigger: A user selects the “Logout” option.
+Expected Behavior: The system invalidates the user’s session token and redirects the user to a public or login page.
+Acceptance Criteria:
+After logout, the user cannot access protected resources without re-authenticating.
+Session tokens become invalid immediately after logout.
+Logging out on one device does not automatically terminate sessions on other devices (unless explicitly configured).
+FR-USER-05: Session Management and Renewal
+Description: The system shall manage user sessions with automatic expiration and renewal mechanisms.
+Trigger: A user remains inactive for a defined period, or an active session approaches expiration.
+Expected Behavior:
+Inactive sessions expire after a defined timeout period.
+Active sessions may be renewed automatically before expiration.
+Users are required to re-authenticate after session expiration.
+Acceptance Criteria:
+Sessions expire after the configured inactivity threshold.
+Active users are not logged out unexpectedly during normal interaction.
+Expired sessions cannot be reused to access protected endpoints.
+FR-USER-06: Role Assignment and Management
+Description: The system shall allow document owners to assign, modify, or revoke roles for other users on a per-document basis.
+Trigger: The document owner updates sharing or permission settings.
+Expected Behavior: The system updates the role associated with the selected user and enforces the new permissions immediately.
+Acceptance Criteria:
+Only document owners can change roles or transfer ownership.
+Role updates take effect immediately without requiring page reload.
+Users cannot assign roles higher than their own permission level.
+Unauthorized role modification attempts are rejected by the backend.
+FR-USER-07: Account Recovery
+Description: The system shall provide a secure mechanism for users to reset their password if they forget it.
+Trigger: A user selects “Forgot Password” and submits their registered email address.
+Expected Behavior: The system sends a secure password reset link to the registered email address, allowing the user to create a new password.
+Acceptance Criteria:
+Password reset links expire after a defined time period.
+Reset links can only be used once.
+Successful password reset invalidates all previous active sessions.
+Users must authenticate using the new password after reset.
+FR-USER-08: Profile Management
+Description: The system shall allow users to view and update basic profile information.
+Trigger: A user accesses their account settings page.
+Expected Behavior: The system allows the user to update editable profile fields (e.g., display name, profile image) and persists the changes.
+Acceptance Criteria:
+Updated profile information is reflected across the system (e.g., collaboration presence display).
+Changes persist after logout and relogin.
+Invalid input values are rejected with appropriate validation messages.
+FR-USER-09: Account Deletion
+Description: The system shall allow users to permanently delete their account.
+Trigger: A user selects “Delete Account” and confirms the action.
+Expected Behavior: The system deletes or anonymizes the user account and terminates all active sessions associated with the account.
+Acceptance Criteria:
+Deleted users cannot log in again using the same credentials.
+All active sessions are immediately invalidated.
+Documents owned by the user are either transferred to another owner or handled according to predefined system rules.
+The account deletion process requires explicit confirmation to prevent accidental removal.
+
+
+1.3 Non-Functional Requirements
+	Latency
+NFR-LAT-01
+Under normal operating conditions, 95% of text edits made by one active collaborator shall be visible to other collaborators editing the same document within 500 ms of submission.
+Justification: Delays above this threshold make real-time collaboration feel inconsistent and can cause users to type over stale content.
+NFR-LAT-02
+For AI assistant requests on selections up to 2,000 characters, the system shall acknowledge the request and display a visible processing state within 500 ms, and shall begin streaming or returning the AI-generated response within 10 seconds in 95% of requests.
+Justification: Users need immediate feedback that the request was received, while a short wait for AI generation remains acceptable if the system clearly indicates progress.
+NFR-LAT-03
+For documents under 10,000 characters, the editor shall load the document content and become ready for user editing within 2 seconds in 95% of requests under normal operating conditions.
+Justification: Longer waits interrupt the writing flow and make opening shared documents feel unreliable.
+
+
+Scalability
+NFR-SCALE-01
+The system shall support at least 10 concurrent active editors per document, where each user performs up to 5 edit operations per second, while maintaining edit propagation latency within 500 ms (95th percentile).
+Justification: Ensures real-time collaboration remains responsive under realistic multi-user editing loads.
+NFR-SCALE-02
+The system shall support at least 1,000 concurrently active documents, each with at least 2 active users, without exceeding 80% average CPU utilization on application servers.
+Justification: Prevents performance degradation during peak usage across the platform.
+NFR-SCALE-03
+All backend services handling document editing and AI requests shall be horizontally scalable, with no reliance on in-memory session state, enabling linear scaling by adding instances behind a load balancer.
+Verification: System can scale from 1 → N instances with no functional changes and ≤10% performance degradation.
+NFR-SCALE-04
+The system architecture shall support projected workload growth of at least 1.5x in monthly active users and active documents over 12 months without requiring changes to public API contracts or replacement of the core real-time synchronization mechanism.
+Justification: The assignment explicitly asks for an expected growth model, and this requirement ensures the design can evolve without costly architectural rewrites.
+
+
+	Availability
+NFR-AVAIL-01
+The system shall maintain ≥99% monthly uptime, excluding scheduled maintenance windows not exceeding 10 hours per month.
+Verification: Uptime measured via external monitoring over rolling 7-day periods.
+NFR-AVAIL-02
+In the event of AI service failure or timeout (>5 seconds), the system shall gracefully degrade, allowing document editing, saving, and collaboration features to remain fully operational, with user-visible notification of AI unavailability.
+Justification: Prevents external dependency failure from blocking core functionality.
+NFR-AVAIL-03
+The system shall automatically reconnect and restore editing sessions within 30 seconds after network recovery, preserving unsynchronized local changes and resolving conflicts using operational transformation or CRDT mechanisms.
+Verification: No data loss in simulated disconnection scenarios up to 30 seconds.
+
+
+	Security and Privacy
+NFR-SEC-01
+All client-server and service-to-service communication shall be encrypted using TLS 1.2 or higher with strong cipher suites.
+Verification: No endpoints accessible over unencrypted HTTP.
+NFR-SEC-02
+All document content and metadata shall be encrypted at rest using AES-256 or equivalent, including backups and replicas.
+Verification: Storage-level encryption enabled and enforced.
+NFR-SEC-03
+AI interaction logs (prompts and responses) shall be access-controlled via role-based access control (RBAC) and retained for a maximum of 30 days, after which they are automatically deleted or anonymized.
+Justification: Balances debugging needs with privacy protection.
+NFR-SEC-04
+The system shall explicitly notify users before transmitting any document content to third-party AI services and shall allow users to opt out of AI processing per document or request.
+Verification: Consent UI present and enforced before API calls.
+
+
+1.4 User Stories and Scenarios
+
+User Story
+Details
+US-01: Simultaneous Editing
+Actor: Editor
+Description: Edit a document simultaneously with others in real time
+Trigger: User types while others are active
+Precondition: Shared document with edit access
+Expected Behavior: Changes propagate via sync engine (OT/CRDT) in real time
+Acceptance Criteria: Updates visible ≤ 500ms; no refresh; correct cursor sync
+Related NFR: Real Time Collaboration
+US-02: Offline Editing & Reconnection
+Actor: Collaborator
+Description: Preserve edits during temporary disconnection
+Trigger: Network loss during editing
+Precondition: Active editing session
+Expected Behavior: Edits stored locally and resynced on reconnect
+Acceptance Criteria: No data loss; successful merge; reconnection notification
+Related NFR: Real Time Collaboration
+US-03: Concurrent Paragraph Editing
+Actor: Editor
+Description: Handle overlapping edits safely
+Trigger: Multiple users edit same region
+Precondition: Multiple active editors
+Expected Behavior: Conflict resolution (OT/CRDT) merges edits deterministically
+Acceptance Criteria: No overwrite; consistent document state; deterministic results
+Related NFR: Data consistency
+US-04: Summarize Selected Text
+Actor: Editor
+Description: Generate summary for selected text
+Trigger: User selects text and clicks “Summarize”
+Precondition: AI access enabled
+Expected Behavior: AI returns suggestion shown in side panel
+Acceptance Criteria: Original unchanged; preview visible; accept/reject enabled
+Related NFR: AI latency
+US-05: Translate Text
+Actor: Editor
+Description: Translate selected text to another language
+Trigger: User selects text and chooses language
+Precondition: AI service available
+Expected Behavior: Translation returned as editable suggestion
+Acceptance Criteria: Accept/reject/modify options available
+Related NFR: Usability
+US-06: Partial Acceptance of AI Suggestion
+Actor: Editor
+Description: Modify AI output before applying
+Trigger: AI suggestion generated
+Precondition: Suggestion visible
+Expected Behavior: User edits suggestion before applying changes
+Acceptance Criteria: Partial edits allowed; only approved content applied
+Related NFR: Usability
+US-07: AI Request During Active Collaboration
+Actor: Collaborator
+Description: Handle AI rewrite during concurrent editing
+Trigger: AI request on shared region
+Precondition: Multiple editors active
+Expected Behavior: Region marked “AI pending” without blocking edits
+Acceptance Criteria: No locking; continued editing; consistent merge after acceptance
+Related NFR: Availability
+US-08: Version Revert
+Actor: Document Owner
+Description: Restore previous document version
+Trigger: User selects version and clicks revert
+Precondition: Version history exists
+Expected Behavior: System restores version and logs new version entry
+Acceptance Criteria: Correct restore; history preserved; visible to collaborators
+Related NFR: Data integrity
+US-09: Share with Read-Only Access
+Actor: Document Owner
+Description: Share document with view-only permissions
+Trigger: User sets sharing to “viewer”
+Precondition: Document exists
+Expected Behavior: System enforces read-only restrictions
+Acceptance Criteria: No editing; AI disabled; UI reflects role
+Related NFR: Security
+US-10: Commenter Attempts to Edit
+Actor: Commenter
+Description: Prevent unauthorized edits
+Trigger: Commenter tries to edit content
+Precondition: Role = commenter
+Expected Behavior: System blocks edit with clear message
+Acceptance Criteria: No content change; error message shown
+Related NFR: Security
+US-11: Viewer Attempts to Use AI
+Actor: Viewer
+Description: Explain restricted AI access
+Trigger: Viewer clicks AI feature
+Precondition: Role = viewer
+Expected Behavior: AI features disabled with tooltip explanation
+Acceptance Criteria: No API call; tooltip displayed; buttons disabled
+Related NFR: Usability + Security
+
+
+1.5 Requirements Traceability
+This section establishes traceability between user stories, functional requirements, non-functional requirements, and architectural components. The purpose of this matrix is to ensure that:
+Every user story is supported by defined functional requirements.
+Every functional requirement is reflected in the system architecture.
+No requirement is left unimplemented.
+
+User Story
+Functional Requirements
+Non-Functional Requirements
+Architectural Components
+US-01 Simultaneous Editing
+FR-COL-01
+NFR-LAT-01
+Frontend Editor, Real-Time Collaboration Service, Backend API
+US-02 Offline & Reconnection
+FR-COL-01
+NFR-AVAIL-03
+Frontend (Local State), Real-Time Collaboration Service
+US-03 Conflict Handling
+FR-COL-03
+NFR-LAT-01
+Real-Time Collaboration Service
+US-04 AI Summarization
+FR-AI-01, FR-AI-02
+NFR-LAT-02
+Frontend UI, Backend API, AI Integration Service
+US-05 AI Translation
+FR-AI-01, FR-AI-02
+NFR-LAT-02
+Frontend UI, AI Integration Service
+US-06 Partial AI Acceptance
+FR-AI-03
+NFR-USE-02
+Frontend Editor
+US-07 AI During Collaboration
+FR-AI-01, FR-COL-03
+NFR-AVAIL-02
+AI Integration Service, Real-Time Collaboration Service
+US-08 Version Revert
+FR-DOC-02
+NFR-SEC-02
+Backend API, Versioning Service, Database
+US-09 Read-Only Sharing
+FR-DOC-03
+NFR-SEC-01
+Backend API, Authorization Service
+US-10 Commenter Edit Attempt
+FR-USER-02
+NFR-SEC-01
+Authorization Middleware
+US-11 Viewer AI Attempt
+FR-USER-02
+NFR-SEC-04
+Authorization Middleware, AI Integration Service
+
+
+
+All functional requirements defined in Section 1.2 are referenced by at least one user story. Additionally, each requirement maps to one or more architectural components that will be defined in Part 2. This ensures consistency between requirements, system design, and implementation.
+
+
+Part 2: System Architecture
+2.1 Architectural Drivers
+The architectural drivers are prioritized based on their impact on user experience and system feasibility.
+Low-latency collaboration is ranked highest because real-time feedback is essential to usability—delays beyond 500 ms significantly degrade the collaborative experience. Consistency is handled using eventual consistency models (e.g., CRDT/OT), accepting temporary divergence in favor of responsiveness. Availability and scalability ensure the system remains usable under failure and growth conditions, while AI integration is treated as a core but non-blocking feature to avoid disrupting editing workflows.
+
+
+No.
+Driver
+Related Requirements
+Description
+Impact on Architecture
+1
+Low-Latency Real-Time Collaboration
+NFR-LAT-01, FR-COL-01
+The system must propagate edits between users within 500 ms to enable seamless real-time collaboration.
+Forces a push-based communication model (e.g., WebSockets) over polling. Requires a dedicated real-time collaboration service maintaining active sessions and in-memory state. Introduces challenges in horizontal scaling (connection affinity, session distribution) and requires efficient event broadcasting mechanisms. Trade-off: increased infrastructure complexity vs superior user experience.
+2
+Consistency & Conflict Resolution
+FR-COL-03, NFR-AVAIL-03
+The system must ensure concurrent edits do not result in data loss or inconsistent document state.
+Requires adoption of conflict resolution algorithms (CRDT or OT) and a structured document model. CRDT enables offline editing and eventual consistency but increases memory and implementation complexity; OT simplifies transformation logic but typically requires centralized coordination. Trade-off: strong consistency vs scalability and offline capability.
+3
+Availability & Graceful Degradation
+NFR-AVAIL-02, NFR-AVAIL-03
+The system must remain functional during partial failures, especially when AI services are unavailable.
+Requires decoupled architecture separating core editing from AI services. Introduces fallback mechanisms (disable AI features while preserving editing), retry strategies, and local state buffering for reconnection. Trade-off: additional system complexity vs resilience and uninterrupted user workflows.
+4
+Scalability
+NFR-SCALE-01 to NFR-SCALE-04
+The system must support increasing numbers of users, documents, and concurrent editing sessions.
+Requires stateless API services, horizontal scaling, and load balancing. The real-time layer must support distributed event propagation (e.g., pub/sub systems). Trade-off: distributed system complexity vs ability to handle growth and high concurrency.
+5
+Security & Access Control
+NFR-SEC-01 to NFR-SEC-04, FR-USER-02
+The system must protect sensitive document data and enforce role-based access control.
+Requires authentication mechanisms, role-based access control (RBAC), and encryption in transit and at rest. AI integration must include explicit user consent and data handling policies when interacting with third-party services. Trade-off: stricter security measures may increase latency and system complexity.
+6
+AI Integration & Cost Control
+FR-AI-01 to FR-AI-08, NFR-LAT-02
+AI features must be responsive, cost-efficient, and seamlessly integrated without disrupting editing.
+Requires asynchronous processing model (e.g., job queues or event-driven workflows) to avoid blocking the editor. Introduces AI service abstraction layer, prompt templating system, and context selection strategies (e.g., partial document vs full document). Requires rate limiting, quotas, or budgeting mechanisms. Trade-off: richer AI capabilities vs latency, cost, and system complexity.
+7
+Usability & User Experience
+NFR-USE-01 to NFR-USE-03
+The system must provide an intuitive interface that supports collaboration and AI interaction without overwhelming users.
+Influences frontend architecture and state management, including handling multiple cursors, presence indicators, and large documents. Requires thoughtful AI suggestion UX (inline suggestions, accept/reject, partial edits). Trade-off: richer features vs increased UI complexity and cognitive load.
+
+
+These drivers directly influence the system’s architectural decisions and will be reflected in the modular design presented in Section 2.2.
+2.2 System Design using the C4 Model
+2.2.1 Level 1 — System Context Diagram
+This section presents the system architecture using the C4 model at three levels: system context, container, and component. These diagrams illustrate how the system supports real-time collaboration, AI integration, and document management.
+
+
+
+Explanation:
+Users interact with the system through a web application to create and edit documents. The system communicates with an external AI service for writing assistance and uses an email service for notifications and account-related actions.
+
+
+2.2.2 Level 2 — Container Diagram
+
+Explanation:
+The frontend provides the user interface. The backend API handles business logic, authentication, and document management. A real-time service manages live collaboration. The AI service handles communication with the external AI provider. All data is stored in the database.
+2.2.3 Level 3 — Component Diagram (Backend)
+
+
+Explanation:
+The backend is divided into components that handle authentication, document operations, user management, AI requests, permissions, and versioning. All components access data through a repository layer connected to the database.
+2.2.4 Feature Decomposition
+The system is divided into key modules:
+Frontend: User interface and editor
+Real-Time Service: Handles live collaboration
+Backend API: Manages logic and requests
+AI Service: Processes AI features
+Database: Stores documents, users, and versions
+This modular design allows independent development and scalability.
+2.2.5 AI Integration Design
+Only selected text is sent to the AI to reduce cost and protect privacy
+AI results are shown as suggestions, not automatically applied
+Users can accept, reject, or modify AI output
+AI requests are handled separately from core editing to avoid system disruption
+2.2.6 API Design
+The system exposes APIs for:
+Documents: create, read, update, delete
+AI Features: summarize, rewrite, translate
+Users: login, register, manage roles
+AI requests may be asynchronous, with clear success or error responses.
+2.2.7 Authentication and Authorization
+The system uses role-based access control (owner, editor, commenter, viewer). Authentication ensures only authorized users access documents, while authorization controls actions like editing, sharing, and using AI features.
+2.2.8 Communication Model
+The system uses real-time communication for collaboration. Users receive updates instantly. If a connection is lost, changes are buffered and synchronized upon reconnection
+
+2.3 Code Structure & Repository Organization
+This section describes how the codebase is organized to support modular development, scalability, and team collaboration.
+Repository Strategy
+The project will use a monorepo structure, where frontend, backend, and shared code are maintained in a single repository.
+Justification:
+Easier collaboration for a small team
+Simplifies dependency management
+Allows shared types and models between frontend and backend
+Easier to maintain consistency between API and UI
+
+Directory Structure
+The repository is organized as follows:
+/project-root
+│
+├── frontend/        # Web application (UI, editor, components)
+├── backend/         # API, business logic, services
+├── realtime/        # Real-time collaboration service
+├── ai-service/      # AI integration and prompt handling
+├── shared/          # Shared types, constants, utilities
+├── docs/            # Diagrams and documentation
+└── README.md        # Setup and usage instructions
+Explanation:
+frontend/ handles the user interface and editor logic
+backend/ contains API endpoints, authentication, and document management
+realtime/ manages live collaboration and synchronization
+ai-service/ handles communication with external AI providers
+shared/ avoids duplication by storing common code
+
+Shared Code
+Shared code (e.g., data models, validation rules, constants) is placed in the shared/ directory.
+Purpose:
+Ensure consistency between frontend and backend
+Avoid duplicate definitions (e.g., document schema, user roles)
+Improve maintainability
+
+Configuration Management
+Sensitive data such as API keys, database credentials, and AI provider tokens are stored in environment variables.
+Approach:
+Use .env files for local development
+Never store secrets in the repository
+Use environment-based configuration for different environments
+
+Testing Strategy
+The system will include multiple levels of testing:
+Unit Tests: Test individual components and functions
+Integration Tests: Test interaction between services (e.g., API + database)
+End-to-End Tests: Test complete workflows (e.g., create and edit document)
+For AI features, mock responses can be used to avoid repeated API calls during testing.
+Summary
+The chosen repository structure supports modular development, reduces duplication through shared code, and enables efficient collaboration within the team. The monorepo approach aligns well with the project scope and team size.
+
+2.4 Data Model
+2.5 Architecture Decision Records (ADRs)
+ask if you need anything before generating the markdown
