@@ -3,6 +3,22 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Node / Vite
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+frontend/.vite/
+
+# SQLite PoC database files
+*.sqlite
+*.sqlite3
+*.db
+
+# macOS
+.DS_Store
+
 # C extensions
 *.so
 
