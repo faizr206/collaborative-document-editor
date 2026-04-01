@@ -4,7 +4,7 @@ from app.models import Document, DocumentPermission, User
 from app.schemas import DocumentPermissionCreate
 from app.db import get_session
 from datetime import datetime
-router = APIRouter(prefix="/permissions", tags=["permissions"])
+router = APIRouter(prefix="/api/permissions", tags=["permissions"])
 
 @router.post("/grant", response_model=str, status_code=status.HTTP_201_CREATED)
 def grant_permission(
