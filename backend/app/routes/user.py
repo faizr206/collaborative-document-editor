@@ -7,6 +7,7 @@ from app.db import get_session
 from app.models import User
 
 from app.auth import (
+    CurrentUser,
     hash_password,
     create_access_token,
     UserRegister,
@@ -55,3 +56,7 @@ async def login(user: UserLogin, session: Session = Depends(get_session)):
         access_token=access_token,
         expires_in=TOKEN_EXPIRY_SECONDS,
     )
+
+@router.get("/quick_secure_test")
+def quick_secure_route(current_user: CurrentUser):
+    return {"message": "This is a secure route test", "user": current_user}

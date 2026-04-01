@@ -60,4 +60,4 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
      except jwt.InvalidTokenError as e:
           print("JWT decode error:", repr(e))
           raise HTTPException(status_code=401, detail="Invalid token")
-CurrentUser = Annotated[str, Depends(verify_token)]
+CurrentUser = Annotated[User, Depends(verify_token)]
