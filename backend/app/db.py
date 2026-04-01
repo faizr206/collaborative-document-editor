@@ -5,9 +5,9 @@ from sqlmodel import SQLModel, create_engine, Session,select
 
 from app.models import User, Document, DocumentPermission, DocumentVersion
 
-DATABASE_URL = "postgresql://localhost:5432/collaborative_docs"
+DATABASE_URL = "sqlite:///./sqlite.db"
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 def get_session():
     with Session(engine) as session:
