@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 temp_owner_id = 1
 
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 def serialize_timestamp(value: datetime) -> str:
     if value.tzinfo is None:
@@ -40,13 +41,14 @@ def serialize_document(document: Document) -> dict:
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def create_document(
-    document: DocumentCreate,
-    session: Session = Depends(get_session)
+        document: DocumentCreate,
+        current_user: CurrentUser,
+        session: Session = Depends(get_session)
 ):
     new_doc = Document(
         title=document.title,
         content=document.content,
-        owner_id=temp_owner_id
+        owner_id=current_user.id
     )
 
     session.add(new_doc)
@@ -57,7 +59,7 @@ def create_document(
 
 @router.get("", response_model=DocumentListResponse)
 def list_all_documents(
-    session: Session = Depends(get_session)
+        session: Session = Depends(get_session)
 ):
     documents = session.exec(select(Document)).all()
     items = [
@@ -72,8 +74,8 @@ def list_all_documents(
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document_by_id(
-    document_id: int,
-    session: Session = Depends(get_session)
+        document_id: int,
+        session: Session = Depends(get_session)
 ):
     document = session.exec(select(Document).where(Document.id == document_id)).first()
     if not document:
@@ -83,9 +85,10 @@ def get_document_by_id(
 #Document updates and deletes
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document_by_id(
-          document_id: int,
-          document_update: DocumentUpdate,
-          session: Session = Depends(get_session)
+        document_id: int,
+        document_update: DocumentUpdate,
+        current_user: CurrentUser,
+        session: Session = Depends(get_session)
      ):
      changed = False
      document = session.exec(select(Document).where(Document.id == document_id)).first()
@@ -108,13 +111,17 @@ def update_document_by_id(
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_id(
-          document_id: int,
-          session: Session = Depends(get_session)
+        document_id: int,
+        current_user: CurrentUser,
+        session: Session = Depends(get_session)
      ):
-     document = session.exec(select(Document).where(Document.id == document_id)).first()
-     if not document:
-          raise HTTPException(status_code=404, detail="Document not found")
+    document = session.exec(select(Document).where(Document.id == document_id)).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if document.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
 
-     session.delete(document)
-     session.commit()
-     return Response(status_code=status.HTTP_204_NO_CONTENT)
+    session.delete(document)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
