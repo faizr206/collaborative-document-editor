@@ -2,7 +2,6 @@
 schemas.py — Pydantic models for request/response validation.
 """
 
-# Define your Pydantic models here
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from datetime import datetime
@@ -34,9 +33,37 @@ class DocumentUpdate(BaseModel):
      title: Optional[str] = Field(None, min_length=1, max_length=255, example="Updated Document Title")
      content: Optional[str] = Field(None, example="Updated content of the document.")
 
+
+class DocumentApi(BaseModel):
+     id: int
+     title: str
+     content: str
+     createdAt: str
+     updatedAt: str
+
+
+class DocumentEnvelope(BaseModel):
+     document: DocumentApi
+
+
+class DocumentResponse(BaseModel):
+     data: DocumentEnvelope
+
+
+class DocumentListItem(BaseModel):
+     id: int
+     title: str
+     updatedAt: str
+
+
+class DocumentListEnvelope(BaseModel):
+     items: list[DocumentListItem]
+
+
+class DocumentListResponse(BaseModel):
+     data: DocumentListEnvelope
+
 class DocumentPermissionCreate(BaseModel):
      document_id: int
      user_id: int
      permission: Literal["read", "write", "owner"]
-
-
