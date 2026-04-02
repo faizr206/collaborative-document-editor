@@ -1,5 +1,7 @@
-import { FormEvent } from "react";
+import { FormEvent, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
   createDocument,
   getDocument,
@@ -36,11 +38,35 @@ export function DocumentEditor({
   onStatusChange
 }: DocumentEditorProps) {
   const queryClient = useQueryClient();
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: content ? toEditorHtml(content) : "<p></p>",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "tiptap-editor"
+      }
+    },
+    onUpdate: ({ editor: nextEditor }) => {
+      onContentChange(nextEditor.getHTML());
+    }
+  });
 
   const documentListQuery = useQuery({
     queryKey: ["documents"],
     queryFn: listDocuments
   });
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const nextContent = content ? toEditorHtml(content) : "<p></p>";
+    if (editor.getHTML() !== nextContent) {
+      editor.commands.setContent(nextContent, { emitUpdate: false });
+    }
+  }, [content, editor]);
 
   const createMutation = useMutation({
     mutationFn: createDocument,
@@ -191,13 +217,43 @@ export function DocumentEditor({
 
           <div className="field">
             <label htmlFor="document-content">Document Content</label>
-            <textarea
-              id="document-content"
-              className="textarea"
-              value={content}
-              onChange={(event) => onContentChange(event.target.value)}
-              placeholder="Type here to validate the document contract end to end."
-            />
+            <div className="editor-frame" id="document-content">
+              <div className="editor-toolbar" aria-label="Editor formatting">
+                <button
+                  className={`button button-toolbar${editor?.isActive("bold") ? " is-active" : ""}`}
+                  type="button"
+                  onClick={() => editor?.chain().focus().toggleBold().run()}
+                  disabled={!editor || !editor.can().chain().focus().toggleBold().run()}
+                >
+                  Bold
+                </button>
+                <button
+                  className={`button button-toolbar${editor?.isActive("italic") ? " is-active" : ""}`}
+                  type="button"
+                  onClick={() => editor?.chain().focus().toggleItalic().run()}
+                  disabled={!editor || !editor.can().chain().focus().toggleItalic().run()}
+                >
+                  Italic
+                </button>
+                <button
+                  className={`button button-toolbar${editor?.isActive("bulletList") ? " is-active" : ""}`}
+                  type="button"
+                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                  disabled={!editor}
+                >
+                  Bullets
+                </button>
+                <button
+                  className={`button button-toolbar${editor?.isActive("orderedList") ? " is-active" : ""}`}
+                  type="button"
+                  onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                  disabled={!editor}
+                >
+                  Numbered
+                </button>
+              </div>
+              <EditorContent editor={editor} />
+            </div>
           </div>
 
           <div className="actions">
@@ -209,4 +265,22 @@ export function DocumentEditor({
       </section>
     </div>
   );
+}
+
+function toEditorHtml(content: string): string {
+  const trimmedContent = content.trim();
+  if (!trimmedContent) {
+    return "<p></p>";
+  }
+
+  return /<\/?[a-z][\s\S]*>/i.test(trimmedContent) ? content : `<p>${escapeHtml(content)}</p>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

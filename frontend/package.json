@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.79.0",
+    "@tiptap/react": "^3.22.1",
+    "@tiptap/starter-kit": "^3.22.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -21,4 +23,3 @@
     "vite": "^5.4.10"
   }
 }
-

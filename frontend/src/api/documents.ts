@@ -12,12 +12,23 @@ type BackendDocument = {
   id: number;
   title: string;
   content: string;
-  owner_id: number;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type DocumentListItemDto = Pick<DocumentDto, "id" | "title" | "updatedAt">;
+
+type DocumentResponseEnvelope = {
+  data: {
+    document: BackendDocument;
+  };
+};
+
+type DocumentListResponseEnvelope = {
+  data: {
+    items: DocumentListItemDto[];
+  };
+};
 
 type ApiErrorEnvelope = {
   detail?: string;
@@ -41,8 +52,8 @@ function mapDocument(document: BackendDocument): DocumentDto {
     id: document.id,
     title: document.title,
     content: document.content,
-    createdAt: document.created_at,
-    updatedAt: document.updated_at
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt
   };
 }
 
@@ -77,36 +88,32 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<DocumentDto> {
-  const payload = await requestJson<BackendDocument>("/documents/", {
+  const payload = await requestJson<DocumentResponseEnvelope>("/documents", {
     method: "POST",
     body: JSON.stringify(input)
   });
 
-  return mapDocument(payload);
+  return mapDocument(payload.data.document);
 }
 
 export async function getDocument(documentId: number): Promise<DocumentDto> {
-  const payload = await requestJson<BackendDocument>(`/documents/${documentId}`);
-  return mapDocument(payload);
+  const payload = await requestJson<DocumentResponseEnvelope>(`/documents/${documentId}`);
+  return mapDocument(payload.data.document);
 }
 
 export async function updateDocument(
   documentId: number,
   input: UpdateDocumentInput
 ): Promise<DocumentDto> {
-  const payload = await requestJson<BackendDocument>(`/documents/${documentId}`, {
+  const payload = await requestJson<DocumentResponseEnvelope>(`/documents/${documentId}`, {
     method: "PUT",
     body: JSON.stringify(input)
   });
 
-  return mapDocument(payload);
+  return mapDocument(payload.data.document);
 }
 
 export async function listDocuments(): Promise<DocumentListItemDto[]> {
-  const payload = await requestJson<BackendDocument[]>("/documents/");
-  return payload.map((document) => ({
-    id: document.id,
-    title: document.title,
-    updatedAt: document.updated_at
-  }));
+  const payload = await requestJson<DocumentListResponseEnvelope>("/documents");
+  return payload.data.items;
 }

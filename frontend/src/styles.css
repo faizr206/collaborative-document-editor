@@ -152,6 +152,52 @@ textarea {
   resize: vertical;
 }
 
+.editor-frame {
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  background: white;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.button-toolbar {
+  background: #e2e8f0;
+  color: #0f172a;
+  padding: 8px 12px;
+}
+
+.button-toolbar.is-active {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.tiptap-editor {
+  min-height: 360px;
+  padding: 14px;
+  outline: none;
+}
+
+.tiptap-editor p {
+  margin: 0 0 12px;
+}
+
+.tiptap-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-editor ul,
+.tiptap-editor ol {
+  padding-left: 1.5rem;
+}
+
 .content {
   padding: 24px;
 }
@@ -203,4 +249,3 @@ textarea {
     border-bottom: 1px solid #e2e8f0;
   }
 }
-
