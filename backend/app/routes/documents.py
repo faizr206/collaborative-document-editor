@@ -10,6 +10,7 @@ from app.schemas import (
     DocumentUpdate
 )
 from app.db import get_session
+from app.auth import CurrentUser
 from datetime import datetime, timezone
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 

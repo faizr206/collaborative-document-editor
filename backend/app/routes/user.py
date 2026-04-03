@@ -60,4 +60,3 @@ async def login(user: UserLogin, session: Session = Depends(get_session)):
 @router.get("/quick_secure_test")
 def quick_secure_route(current_user: CurrentUser):
     return {"message": "This is a secure route test", "user": current_user}
-router = APIRouter(prefix="/api/user", tags=["user"])
