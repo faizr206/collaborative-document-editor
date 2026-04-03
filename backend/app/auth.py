@@ -1,5 +1,6 @@
 import hashlib
-from jose import jwt
+import jwt
+# from jose import jwt
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 from fastapi import Depends, HTTPException
