@@ -16,8 +16,6 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 temp_owner_id = 1
 
-router = APIRouter(prefix="/documents", tags=["documents"])
-
 def serialize_timestamp(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -125,4 +123,3 @@ def delete_document_by_id(
     session.delete(document)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

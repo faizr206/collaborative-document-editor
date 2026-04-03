@@ -1,4 +1,6 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api").replace(/\/$/, "");
+import { getAccessToken } from "./auth";
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 export type DocumentDto = {
   id: number;
@@ -58,9 +60,11 @@ function mapDocument(document: BackendDocument): DocumentDto {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers ?? {})
     },
     ...init
@@ -88,7 +92,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>("/documents", {
+  const payload = await requestJson<DocumentResponseEnvelope>("/api/documents", {
     method: "POST",
     body: JSON.stringify(input)
   });
@@ -97,7 +101,7 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
 }
 
 export async function getDocument(documentId: number): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>(`/documents/${documentId}`);
+  const payload = await requestJson<DocumentResponseEnvelope>(`/api/documents/${documentId}`);
   return mapDocument(payload.data.document);
 }
 
@@ -105,7 +109,7 @@ export async function updateDocument(
   documentId: number,
   input: UpdateDocumentInput
 ): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>(`/documents/${documentId}`, {
+  const payload = await requestJson<DocumentResponseEnvelope>(`/api/documents/${documentId}`, {
     method: "PUT",
     body: JSON.stringify(input)
   });
@@ -114,6 +118,6 @@ export async function updateDocument(
 }
 
 export async function listDocuments(): Promise<DocumentListItemDto[]> {
-  const payload = await requestJson<DocumentListResponseEnvelope>("/documents");
+  const payload = await requestJson<DocumentListResponseEnvelope>("/api/documents");
   return payload.data.items;
 }

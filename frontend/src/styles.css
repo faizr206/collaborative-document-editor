@@ -81,7 +81,11 @@ button {
 .document-meta,
 .footer-actions,
 .footer-hints,
-.toolbar-group {
+.toolbar-group,
+.auth-panel,
+.auth-fields,
+.auth-mode-toggle,
+.auth-session-copy {
   display: flex;
   align-items: center;
 }
@@ -125,6 +129,104 @@ button {
   gap: 14px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.auth-panel {
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.auth-panel-logged-in {
+  justify-content: space-between;
+  min-width: 220px;
+}
+
+.auth-mode-toggle {
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(226, 233, 245, 0.7);
+}
+
+.auth-mode-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.auth-mode-button.is-active {
+  background: var(--surface-strong);
+  color: #213049;
+  box-shadow: 0 6px 18px rgba(30, 42, 62, 0.1);
+}
+
+.auth-fields {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.auth-field {
+  display: flex;
+}
+
+.auth-input {
+  min-width: 132px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  color: #172033;
+}
+
+.auth-input::placeholder {
+  color: var(--text-subtle);
+}
+
+.auth-input:focus-visible,
+.auth-mode-button:focus-visible {
+  outline: 2px solid rgba(41, 94, 255, 0.52);
+  outline-offset: 2px;
+}
+
+.auth-submit {
+  min-height: 38px;
+}
+
+.auth-error {
+  margin: 0;
+  width: 100%;
+  color: var(--error);
+  font-size: 0.875rem;
+}
+
+.auth-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(232, 248, 238, 0.95);
+  color: var(--success);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-identity {
+  font-weight: 600;
+  color: #213049;
 }
 
 .primary-action,
@@ -689,6 +791,17 @@ button {
 
   .topbar-actions {
     justify-content: flex-start;
+  }
+
+  .auth-panel,
+  .auth-fields {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .auth-field,
+  .auth-input {
+    width: 100%;
   }
 
   .toolbar-shell {

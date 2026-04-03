@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
+import type { AuthSession } from "../../api/auth";
 import {
   createDocument,
   getDocument,
@@ -8,6 +9,7 @@ import {
   updateDocument,
   type DocumentDto
 } from "../../api/documents";
+import { AuthPanel } from "../auth/AuthPanel";
 import { CollaboratorList } from "./CollaboratorList";
 import { DocumentHeader } from "./DocumentHeader";
 import { EditorToolbar } from "./EditorToolbar";
@@ -19,7 +21,23 @@ const mockCollaborators: Collaborator[] = [{ id: "local-user", name: "You", init
 
 const AUTOSAVE_DELAY_MS = 1200;
 
-export function DocumentEditorPage() {
+type DocumentEditorPageProps = {
+  authBusy: boolean;
+  authError: string | null;
+  authSession: AuthSession | null;
+  onLogin: (input: { username: string; password: string }) => Promise<void>;
+  onRegister: (input: { username: string; email: string; password: string }) => Promise<void>;
+  onLogout: () => void;
+};
+
+export function DocumentEditorPage({
+  authBusy,
+  authError,
+  authSession,
+  onLogin,
+  onRegister,
+  onLogout
+}: DocumentEditorPageProps) {
   const queryClient = useQueryClient();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [documentId, setDocumentId] = useState<number | null>(null);
@@ -84,6 +102,7 @@ export function DocumentEditorPage() {
 
   const isDirty = title !== savedSnapshot.title || content !== savedSnapshot.content;
   const isBusy = createMutation.isPending || loadMutation.isPending;
+  const isAuthenticated = authSession !== null;
 
   useEffect(() => {
     if (documentId === null) {
@@ -184,11 +203,21 @@ export function DocumentEditorPage() {
         </div>
 
         <div className="topbar-actions">
+          <AuthPanel
+            isAuthenticated={isAuthenticated}
+            username={authSession?.username ?? null}
+            isBusy={authBusy}
+            errorMessage={authError}
+            onLogin={onLogin}
+            onRegister={onRegister}
+            onLogout={onLogout}
+          />
           <button
             className="primary-action"
             type="button"
             onClick={() => createMutation.mutate({ title: "Untitled document" })}
-            disabled={isBusy}
+            disabled={isBusy || !isAuthenticated}
+            title={isAuthenticated ? undefined : "Login before creating a document."}
           >
             {createMutation.isPending ? "Creating..." : "New document"}
           </button>
@@ -270,7 +299,8 @@ export function DocumentEditorPage() {
                 onClick={() => {
                   void persistDocument("manual");
                 }}
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || !isAuthenticated}
+                title={isAuthenticated ? undefined : "Login before saving changes."}
               >
                 {saveMutation.isPending ? "Saving..." : "Save now"}
               </button>
