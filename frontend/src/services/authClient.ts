@@ -1,5 +1,11 @@
 import type { SessionState } from "../lib/types";
 import { readStorage, writeStorage } from "../lib/storage";
+import {
+  clearStoredSession,
+  getStoredSession,
+  login as loginRequest,
+  register as registerRequest
+} from "../api/auth";
 
 const BASE_URL = "http://127.0.0.1:8000";
 const STORAGE_KEY = "frontend-session";
@@ -15,94 +21,56 @@ type RegisterInput = {
   password: string;
 };
 
-type LoginResponse = {
-  access_token?: string;
-  token?: string;
-  token_type?: string;
-  username?: string;
-  email?: string;
-  user?: {
-    username?: string;
-    email?: string;
-  };
-};
-
 function saveSession(session: SessionState | null) {
   writeStorage(STORAGE_KEY, session);
 }
 
-function buildSession(data: LoginResponse, fallbackUsername?: string): SessionState {
-  const username = data.user?.username ?? data.username ?? fallbackUsername ?? "user";
-  const email = data.user?.email ?? data.email ?? "";
-
+function buildSession(input: {
+  username: string;
+  email?: string;
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}): SessionState {
   return {
-    token: data.access_token ?? data.token ?? "",
+    accessToken: input.accessToken,
+    tokenType: input.tokenType,
+    expiresIn: input.expiresIn,
     user: {
-      username,
-      email
+      id: input.username,
+      username: input.username,
+      email: input.email ?? "",
+      displayName: input.username,
+      avatarUrl: null
     }
-  } as SessionState;
+  };
 }
 
 export const authClient = {
   async getSession(): Promise<SessionState | null> {
+    const authSession = getStoredSession();
+    if (authSession) {
+      const mappedSession = buildSession(authSession);
+      saveSession(mappedSession);
+      return mappedSession;
+    }
+
     return readStorage<SessionState | null>(STORAGE_KEY, null);
   },
 
   async login(input: LoginInput): Promise<SessionState> {
-    const response = await fetch(`${BASE_URL}/user_auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(input)
-    });
-
-    if (!response.ok) {
-      let message = "Invalid username or password.";
-      try {
-        const errorData = await response.json();
-        message =
-          errorData?.detail ??
-          errorData?.error?.message ??
-          message;
-      } catch {
-        // ignore json parse errors
-      }
-      throw new Error(message);
-    }
-
-    const data = (await response.json()) as LoginResponse;
-    const session = buildSession(data, input.username);
+    const authSession = await loginRequest(input);
+    const session = buildSession(authSession);
     saveSession(session);
     return session;
   },
 
   async register(input: RegisterInput): Promise<void> {
-    const response = await fetch(`${BASE_URL}/user_auth/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(input)
-    });
-
-    if (!response.ok) {
-      let message = "Registration failed.";
-      try {
-        const errorData = await response.json();
-        message =
-          errorData?.detail ??
-          errorData?.error?.message ??
-          message;
-      } catch {
-        // ignore json parse errors
-      }
-      throw new Error(message);
-    }
+    await registerRequest(input);
   },
 
   async logout(): Promise<void> {
     saveSession(null);
+    clearStoredSession();
   }
 };

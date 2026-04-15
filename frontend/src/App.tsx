@@ -1,55 +1,65 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
+import { AppShell } from "./app/AppShell";
+import { SessionProvider, useSession } from "./app/session";
+import { navigate, useRoute } from "./app/navigation";
+import { AuthPage } from "./features/auth/AuthPage";
+import { DocumentsDashboardPage } from "./features/documents/DocumentsDashboardPage";
+import { DocumentWorkspacePage } from "./features/editor/DocumentWorkspacePage";
+import { DocumentSettingsPage } from "./features/settings/DocumentSettingsPage";
+import { ProfilePage } from "./features/profile/ProfilePage";
 
-function App() {
-  const [status, setStatus] = useState("Connecting...");
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
-  const socketRef = useRef<WebSocket | null>(null);
+function AppContent() {
+  const route = useRoute();
+  const { session, isBootstrapping } = useSession();
+  const isAuthRoute = route.name === "login" || route.name === "register";
 
   useEffect(() => {
-    const socket = new WebSocket("ws://127.0.0.1:8000/ws");
-    socketRef.current = socket;
+    if (isBootstrapping) {
+      return;
+    }
 
-    socket.onopen = () => setStatus("Connected");
-    socket.onmessage = (event) => setMessages((prev) => [...prev, event.data]);
-    socket.onclose = () => setStatus("Disconnected");
-    socket.onerror = () => setStatus("Error");
+    if (!session && !isAuthRoute) {
+      navigate("/login", { replace: true });
+      return;
+    }
 
-    return () => socket.close();
-  }, []);
+    if (session && isAuthRoute) {
+      navigate("/documents", { replace: true });
+    }
+  }, [isAuthRoute, isBootstrapping, session]);
 
-  function sendMessage() {
-    if (!message.trim()) return;
-    socketRef.current?.send(message);
-    setMessage("");
+  if (isBootstrapping) {
+    return <main className="auth-page">Loading workspace...</main>;
   }
 
-  return (
-    <div style={{ padding: "32px", fontFamily: "Arial, sans-serif" }}>
-      <h1>Real-Time Collaboration Test</h1>
-      <p><strong>Status:</strong> {status}</p>
+  if (!session) {
+    return <AuthPage mode={route.name === "register" ? "register" : "login"} />;
+  }
 
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type a message"
-          style={{ padding: "10px", width: "300px" }}
-        />
-        <button onClick={sendMessage} style={{ padding: "10px 16px" }}>
-          Send
-        </button>
-      </div>
+  let page;
 
-      <div style={{ border: "1px solid #ccc", padding: "12px", minHeight: "200px", width: "420px" }}>
-        {messages.length === 0 ? (
-          <p>No messages yet.</p>
-        ) : (
-          messages.map((msg, index) => <div key={index}>{msg}</div>)
-        )}
-      </div>
-    </div>
-  );
+  switch (route.name) {
+    case "document":
+      page = <DocumentWorkspacePage documentId={route.documentId} />;
+      break;
+    case "settings":
+      page = <DocumentSettingsPage documentId={route.documentId} />;
+      break;
+    case "profile":
+      page = <ProfilePage />;
+      break;
+    default:
+      page = <DocumentsDashboardPage />;
+      break;
+  }
+
+  return <AppShell>{page}</AppShell>;
 }
 
-export default App;
+export default function App() {
+  return (
+    <SessionProvider>
+      <AppContent />
+    </SessionProvider>
+  );
+}
