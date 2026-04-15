@@ -1,16 +1,22 @@
-import type { Collaborator } from "./types";
+import type { PresenceUser } from "../../lib/types";
 
 type CollaboratorListProps = {
-  collaborators: Collaborator[];
+  collaborators: PresenceUser[];
 };
 
 export function CollaboratorList({ collaborators }: CollaboratorListProps) {
   return (
     <div className="collaborators" aria-label="Collaborators">
       {collaborators.map((collaborator) => (
-        <div key={collaborator.id} className="collaborator-chip" title={collaborator.name}>
-          <span className="collaborator-avatar">{collaborator.initials}</span>
-          <span className="collaborator-name">{collaborator.name}</span>
+        <div
+          key={collaborator.userId}
+          className={`collaborator-chip${collaborator.isSelf ? " is-self" : ""}`}
+          title={collaborator.displayName}
+        >
+          <span className="collaborator-avatar" style={{ backgroundColor: collaborator.color }}>
+            {collaborator.initials}
+          </span>
+          <span className="collaborator-name">{collaborator.displayName}</span>
         </div>
       ))}
     </div>

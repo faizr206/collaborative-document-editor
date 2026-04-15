@@ -17,7 +17,7 @@ export function SaveStatus({ saveState, lastSavedAt, connectionLabel }: SaveStat
   return (
     <div className="save-status" aria-live="polite">
       <span className={`status-pill status-pill-${saveState}`}>{label}</span>
-      <span className="connection-pill">{connectionLabel}</span>
+      <span className={`connection-pill connection-pill-${connectionLabel.toLowerCase().replace(/\s+/g, "-")}`}>{connectionLabel}</span>
     </div>
   );
 }

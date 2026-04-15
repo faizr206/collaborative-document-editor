@@ -9,6 +9,7 @@ const textColors = ["#111827", "#2563eb", "#0f766e", "#b45309", "#b91c1c"];
 
 export function EditorToolbar({ editor }: EditorToolbarProps) {
   const textColor = (editor?.getAttributes("textStyle").color as string | undefined) ?? "#111827";
+  const isReadOnly = editor ? !editor.isEditable : true;
 
   return (
     <div className="editor-toolbar" role="toolbar" aria-label="Formatting toolbar">
@@ -18,14 +19,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           label="Undo"
           title="Undo (Ctrl/Cmd+Z)"
           onClick={() => editor?.chain().focus().undo().run()}
-          disabled={!editor || !editor.can().chain().focus().undo().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().undo().run()}
         />
         <ToolbarButton
           editor={editor}
           label="Redo"
           title="Redo (Ctrl/Cmd+Shift+Z)"
           onClick={() => editor?.chain().focus().redo().run()}
-          disabled={!editor || !editor.can().chain().focus().redo().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().redo().run()}
         />
       </div>
 
@@ -36,7 +37,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             className="toolbar-select"
             value={getBlockType(editor)}
             onChange={(event) => applyBlockType(editor, event.target.value)}
-            disabled={!editor}
+            disabled={!editor || isReadOnly}
             aria-label="Paragraph style"
           >
             <option value="paragraph">Paragraph</option>
@@ -55,7 +56,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Bold (Ctrl/Cmd+B)"
           isActive={editor?.isActive("bold")}
           onClick={() => editor?.chain().focus().toggleBold().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleBold().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleBold().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -63,7 +64,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Italic (Ctrl/Cmd+I)"
           isActive={editor?.isActive("italic")}
           onClick={() => editor?.chain().focus().toggleItalic().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleItalic().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleItalic().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -71,7 +72,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Underline (Ctrl/Cmd+U)"
           isActive={editor?.isActive("underline")}
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleUnderline().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleUnderline().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -79,7 +80,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Strike"
           isActive={editor?.isActive("strike")}
           onClick={() => editor?.chain().focus().toggleStrike().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleStrike().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleStrike().run()}
         />
       </div>
 
@@ -90,7 +91,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             type="color"
             value={normalizeColor(textColor)}
             onChange={(event) => editor?.chain().focus().setColor(event.target.value).run()}
-            disabled={!editor}
+            disabled={!editor || isReadOnly}
             aria-label="Text color"
           />
         </label>
@@ -103,7 +104,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Bullet list"
           isActive={editor?.isActive("bulletList")}
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleBulletList().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleBulletList().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -111,7 +112,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Numbered list"
           isActive={editor?.isActive("orderedList")}
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleOrderedList().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleOrderedList().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -119,7 +120,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Block quote"
           isActive={editor?.isActive("blockquote")}
           onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleBlockquote().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleBlockquote().run()}
         />
         <ToolbarButton
           editor={editor}
@@ -127,14 +128,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           title="Inline code"
           isActive={editor?.isActive("code")}
           onClick={() => editor?.chain().focus().toggleCode().run()}
-          disabled={!editor || !editor.can().chain().focus().toggleCode().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().toggleCode().run()}
         />
         <ToolbarButton
           editor={editor}
           label="Divider"
           title="Insert divider"
           onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-          disabled={!editor || !editor.can().chain().focus().setHorizontalRule().run()}
+          disabled={!editor || isReadOnly || !editor.can().chain().focus().setHorizontalRule().run()}
         />
       </div>
 
@@ -149,14 +150,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
               promptForLink(editor);
             }
           }}
-          disabled={!editor}
+          disabled={!editor || isReadOnly}
         />
         <ToolbarButton
           editor={editor}
           label="Clear"
           title="Clear formatting"
           onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
-          disabled={!editor}
+          disabled={!editor || isReadOnly}
         />
       </div>
     </div>

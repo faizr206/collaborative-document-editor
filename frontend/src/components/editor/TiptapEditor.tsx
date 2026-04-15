@@ -8,6 +8,8 @@ type TiptapEditorProps = {
   content: string;
   onContentChange: (value: string) => void;
   onEditorChange: (editor: Editor | null) => void;
+  onSelectionChange?: (selection: { from: number; to: number; text: string }) => void;
+  editable?: boolean;
 };
 
 type SlashCommand = {
@@ -84,13 +86,20 @@ const slashCommands: SlashCommand[] = [
   }
 ];
 
-export function TiptapEditor({ content, onContentChange, onEditorChange }: TiptapEditorProps) {
+export function TiptapEditor({
+  content,
+  onContentChange,
+  onEditorChange,
+  onSelectionChange,
+  editable = true
+}: TiptapEditorProps) {
   const extensions = useMemo(() => createEditorExtensions(), []);
   const editor = useEditor({
     extensions,
     content: toEditorHtml(content),
     autofocus: false,
     immediatelyRender: false,
+    editable,
     editorProps: {
       attributes: {
         class: "editor-content-area"
@@ -98,6 +107,14 @@ export function TiptapEditor({ content, onContentChange, onEditorChange }: Tipta
     },
     onUpdate: ({ editor: nextEditor }) => {
       onContentChange(nextEditor.getHTML());
+    },
+    onSelectionUpdate: ({ editor: nextEditor }) => {
+      const { from, to } = nextEditor.state.selection;
+      onSelectionChange?.({
+        from,
+        to,
+        text: nextEditor.state.doc.textBetween(from, to, " ")
+      });
     }
   });
 
@@ -108,6 +125,14 @@ export function TiptapEditor({ content, onContentChange, onEditorChange }: Tipta
       onEditorChange(null);
     };
   }, [editor, onEditorChange]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    editor.setEditable(editable);
+  }, [editable, editor]);
 
   useEffect(() => {
     if (!editor) {
