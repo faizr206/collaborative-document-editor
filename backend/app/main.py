@@ -13,7 +13,7 @@ from app.db import create_db_and_tables, create_default_user
 from app.routes.documents import router as documents_router
 from app.routes.user import router as user_router
 from app.routes.permissions import router as permissions_router
-
+from app.websocket import router as websocket_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,9 +66,12 @@ async def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse
 def root():
     return {"message": "API is running"}
 
+
 app.include_router(documents_router)
 app.include_router(user_router)
 app.include_router(permissions_router)
+app.include_router(websocket_router)
+
 
 @app.get("/health")
 def health_check():
