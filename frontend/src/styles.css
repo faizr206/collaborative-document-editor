@@ -1,4 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
+  --background: 42 24% 95%;
+  --foreground: 222 32% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 32% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 32% 12%;
+  --primary: 222 18% 12%;
+  --primary-foreground: 40 25% 97%;
+  --secondary: 36 22% 93%;
+  --secondary-foreground: 222 22% 18%;
+  --muted: 36 20% 94%;
+  --muted-foreground: 219 12% 42%;
+  --accent: 40 26% 92%;
+  --accent-foreground: 222 22% 18%;
+  --destructive: 4 72% 54%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 32 16% 84%;
+  --input: 32 16% 84%;
+  --ring: 221 83% 56%;
+  --radius: 1rem;
   color: #172033;
   background:
     radial-gradient(circle at top left, rgba(227, 196, 142, 0.26), transparent 28%),
@@ -42,6 +66,106 @@ body {
   min-width: 320px;
   min-height: 100vh;
   color: var(--text);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .editor-prose {
+    @apply min-h-[620px] text-[16px] leading-8 text-foreground outline-none;
+  }
+
+  .editor-prose p {
+    @apply my-0 text-[16px] leading-8 text-foreground;
+  }
+
+  .editor-prose p + p,
+  .editor-prose p + ul,
+  .editor-prose p + ol,
+  .editor-prose p + blockquote,
+  .editor-prose h1 + p,
+  .editor-prose h2 + p,
+  .editor-prose h3 + p,
+  .editor-prose ul + h2,
+  .editor-prose blockquote + h2,
+  .editor-prose ul + p,
+  .editor-prose ol + p {
+    @apply mt-6;
+  }
+
+  .editor-prose h1 {
+    @apply mb-8 text-4xl font-semibold leading-tight tracking-[-0.03em] text-foreground;
+  }
+
+  .editor-prose h2 {
+    @apply mb-5 mt-10 text-2xl font-semibold leading-tight tracking-[-0.02em] text-foreground;
+  }
+
+  .editor-prose h3 {
+    @apply mb-4 mt-8 text-xl font-semibold text-foreground;
+  }
+
+  .editor-prose ul,
+  .editor-prose ol {
+    @apply my-6 pl-7;
+  }
+
+  .editor-prose li {
+    @apply my-2 pl-1;
+  }
+
+  .editor-prose blockquote {
+    @apply my-8 border-l-4 border-foreground pl-6 text-[15px] italic leading-8 text-foreground/85;
+  }
+
+  .editor-prose hr {
+    @apply my-8 border-border;
+  }
+
+  .editor-prose a {
+    @apply text-foreground underline decoration-foreground/35 underline-offset-4;
+  }
+
+  .editor-prose .is-editor-empty:first-child::before {
+    @apply pointer-events-none float-left h-0 text-muted-foreground/80;
+    content: attr(data-placeholder);
+  }
+
+  .editor-bubble-menu {
+    @apply flex items-center gap-1 rounded-2xl border border-border/80 bg-white px-3 py-2 shadow-[0_14px_34px_rgba(15,23,42,0.16)];
+  }
+
+  .editor-toolbar-button {
+    @apply inline-flex h-9 min-w-9 items-center justify-center rounded-xl border border-transparent px-3 text-sm font-medium text-foreground/75 transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .editor-toolbar-button[data-active="true"] {
+    @apply bg-muted text-foreground;
+  }
+
+  .slash-menu-list {
+    @apply min-w-[240px] rounded-2xl border border-border/80 bg-white p-2 shadow-[0_14px_34px_rgba(15,23,42,0.16)];
+  }
+
+  .slash-command {
+    @apply flex w-full flex-col items-start rounded-xl px-3 py-2 text-left transition hover:bg-muted;
+  }
+
+  .slash-command-label {
+    @apply text-sm font-medium text-foreground;
+  }
+
+  .slash-command-description {
+    @apply text-xs text-muted-foreground;
+  }
 }
 
 button,

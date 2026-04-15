@@ -102,7 +102,7 @@ export function TiptapEditor({
     editable,
     editorProps: {
       attributes: {
-        class: "editor-content-area"
+        class: "editor-prose"
       }
     },
     onUpdate: ({ editor: nextEditor }) => {
@@ -146,7 +146,7 @@ export function TiptapEditor({
   }, [content, editor]);
 
   return (
-    <div className="editor-sheet">
+    <div className="relative">
       {editor ? <InlineBubbleMenu editor={editor} /> : null}
       {editor ? <SlashCommandMenu editor={editor} /> : null}
       <EditorContent editor={editor} />
@@ -158,45 +158,49 @@ function InlineBubbleMenu({ editor }: { editor: Editor }) {
   return (
     <BubbleMenu
       editor={editor}
-      className="bubble-menu"
+      className="editor-bubble-menu"
       options={{ placement: "top" }}
       shouldShow={(props) => !props.editor.state.selection.empty}
     >
       <button
-        className={`toolbar-button${editor.isActive("bold") ? " is-active" : ""}`}
+        className="editor-toolbar-button"
         type="button"
         onClick={() => editor.chain().focus().toggleBold().run()}
         title="Bold"
+        data-active={editor.isActive("bold")}
       >
         B
       </button>
       <button
-        className={`toolbar-button${editor.isActive("italic") ? " is-active" : ""}`}
+        className="editor-toolbar-button"
         type="button"
         onClick={() => editor.chain().focus().toggleItalic().run()}
         title="Italic"
+        data-active={editor.isActive("italic")}
       >
         I
       </button>
       <button
-        className={`toolbar-button${editor.isActive("underline") ? " is-active" : ""}`}
+        className="editor-toolbar-button"
         type="button"
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         title="Underline"
+        data-active={editor.isActive("underline")}
       >
         U
       </button>
       <button
-        className={`toolbar-button${editor.isActive("link") ? " is-active" : ""}`}
+        className="editor-toolbar-button"
         type="button"
         onClick={() => promptForLink(editor)}
         title="Link"
+        data-active={editor.isActive("link")}
       >
         Link
       </button>
       {editor.isActive("link") ? (
         <button
-          className="toolbar-button"
+          className="editor-toolbar-button"
           type="button"
           onClick={() => editor.chain().focus().extendMarkRange("link").unsetLink().run()}
           title="Remove link"

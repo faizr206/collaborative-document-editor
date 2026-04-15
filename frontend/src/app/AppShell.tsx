@@ -15,6 +15,11 @@ export function AppShell({ children }: AppShellProps) {
   const route = useRoute();
   const { session, logout } = useSession();
   const activePath = route.name === "document" || route.name === "settings" ? "/documents" : `/${route.name}`;
+  const immersiveDocumentRoute = route.name === "document";
+
+  if (immersiveDocumentRoute) {
+    return <main>{children}</main>;
+  }
 
   return (
     <div className="app-shell">

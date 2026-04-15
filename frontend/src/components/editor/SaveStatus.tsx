@@ -1,4 +1,5 @@
 import type { SaveState } from "./types";
+import { cn } from "../../lib/utils";
 
 type SaveStatusProps = {
   saveState: SaveState;
@@ -15,9 +16,22 @@ export function SaveStatus({ saveState, lastSavedAt, connectionLabel }: SaveStat
   const label = getSaveLabel(saveState, lastSavedAt);
 
   return (
-    <div className="save-status" aria-live="polite">
-      <span className={`status-pill status-pill-${saveState}`}>{label}</span>
-      <span className={`connection-pill connection-pill-${connectionLabel.toLowerCase().replace(/\s+/g, "-")}`}>{connectionLabel}</span>
+    <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
+          saveState === "saved" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+          saveState === "saving" && "border-amber-200 bg-amber-50 text-amber-700",
+          saveState === "dirty" && "border-orange-200 bg-orange-50 text-orange-700",
+          saveState === "error" && "border-rose-200 bg-rose-50 text-rose-700",
+          saveState === "idle" && "border-border bg-muted text-muted-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+        {connectionLabel}
+      </span>
     </div>
   );
 }
