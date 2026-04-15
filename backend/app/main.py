@@ -1,7 +1,7 @@
 """
 main.py — Application entry point.
 """
-
+from app.routes.ai import router as ai_router
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -71,6 +71,7 @@ app.include_router(documents_router)
 app.include_router(user_router)
 app.include_router(permissions_router)
 app.include_router(websocket_router)
+app.include_router(ai_router)
 
 
 @app.get("/health")
