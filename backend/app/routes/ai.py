@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.ai.service import AIService
 from app.db import get_session
-from app.models import AIInteraction
+from app.models import AIInteraction, Document, DocumentPermission
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -21,6 +21,30 @@ class AIRequest(BaseModel):
     user_id: int
 
 
+def user_can_use_ai(session: Session, document_id: int, user_id: int) -> bool:
+    document = session.exec(
+        select(Document).where(Document.id == document_id)
+    ).first()
+
+    if not document:
+        return False
+
+    if document.owner_id == user_id:
+        return True
+
+    permission = session.exec(
+        select(DocumentPermission).where(
+            DocumentPermission.document_id == document_id,
+            DocumentPermission.user_id == user_id,
+        )
+    ).first()
+
+    if not permission:
+        return False
+
+    return permission.permission in {"write", "editor", "owner"}
+
+
 @router.post("/suggest")
 def create_ai_suggestion(
     payload: AIRequest,
@@ -28,6 +52,12 @@ def create_ai_suggestion(
 ):
     if not payload.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
+
+    if not user_can_use_ai(session, payload.document_id, payload.user_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to use AI for this document",
+        )
 
     try:
         result = ai_service.generate_suggestion(
@@ -70,6 +100,12 @@ async def stream_ai_suggestion(
 ):
     if not payload.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
+
+    if not user_can_use_ai(session, payload.document_id, payload.user_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to use AI for this document",
+        )
 
     async def event_generator():
         try:
