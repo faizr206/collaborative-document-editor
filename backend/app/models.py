@@ -37,3 +37,20 @@ class DocumentVersion(SQLModel, table=True):
      content: str
      created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
      edited_by: int = Field(foreign_key="users.id")
+
+class AIInteraction(SQLModel, table=True):
+     __tablename__ = "ai_interactions"
+
+     id: Optional[int] = Field(default=None, primary_key=True)
+
+     document_id: int = Field(foreign_key="documents.id")
+     user_id: int = Field(foreign_key="users.id")
+
+     action_type: str
+     source_text: str
+     context: str = ""
+     instruction: str = ""
+
+     result_text: str
+
+     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
