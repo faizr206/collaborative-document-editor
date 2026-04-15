@@ -12,7 +12,7 @@ import {
   History
 } from "lucide-react";
 import { documentsClient } from "../../services/documentsClient";
-import { mockCollabAdapter } from "../../services/collabAdapter";
+import { collabAdapter } from "../../services/collabAdapter";
 import { versionsClient } from "../../services/versionsClient";
 import { aiClient } from "../../services/aiClient";
 import { exportsClient } from "../../services/exportsClient";
@@ -30,6 +30,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { cn } from "../../lib/utils";
 
 const AUTOSAVE_DELAY_MS = 1200;
+const COLLAB_SYNC_DELAY_MS = 300;
 
 type DocumentWorkspacePageProps = {
   documentId: number;
@@ -64,6 +65,8 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
   const [versionPanelOpen, setVersionPanelOpen] = useState(true);
   const [mobilePanelsOpen, setMobilePanelsOpen] = useState(false);
   const latestSelectionRef = useRef(selection.text);
+  const collabSubscriptionRef = useRef<ReturnType<typeof collabAdapter.connect> | null>(null);
+  const pendingRemoteDocumentRef = useRef<{ title: string; content: string } | null>(null);
 
   const documentQuery = useQuery({
     queryKey: ["documents", documentId],
@@ -104,15 +107,28 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
       return;
     }
 
-    const subscription = mockCollabAdapter.connect({
+    const subscription = collabAdapter.connect({
       bootstrap: bootstrapQuery.data,
       onChange(snapshot) {
         setCollaborators(snapshot.collaborators);
         setConnection(documentsClient.getConnectionIndicator(snapshot.connectionState));
+      },
+      onRemoteDocument(snapshot) {
+        const nextDocument = {
+          title: snapshot.title,
+          content: snapshot.content
+        };
+
+        pendingRemoteDocumentRef.current = nextDocument;
+        setTitle(snapshot.title);
+        setContent(snapshot.content);
+        setBanner(`Live update received from ${snapshot.updatedBy.displayName}.`);
       }
     });
+    collabSubscriptionRef.current = subscription;
 
     return () => {
+      collabSubscriptionRef.current = null;
       subscription.dispose();
     };
   }, [bootstrapQuery.data]);
@@ -173,6 +189,33 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
   const isDirty = title !== savedSnapshot.title || content !== savedSnapshot.content;
   const canEdit = documentQuery.data?.role !== "viewer";
   const canUseAi = canEdit && Boolean(documentQuery.data?.isAiEnabled) && Boolean(selection.text.trim());
+
+  useEffect(() => {
+    const subscription = collabSubscriptionRef.current;
+    if (!subscription || !canEdit || !bootstrapQuery.data) {
+      return;
+    }
+
+    const currentDocument = { title, content };
+    const pendingRemoteDocument = pendingRemoteDocumentRef.current;
+
+    if (
+      pendingRemoteDocument &&
+      pendingRemoteDocument.title === currentDocument.title &&
+      pendingRemoteDocument.content === currentDocument.content
+    ) {
+      pendingRemoteDocumentRef.current = null;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      subscription.publishDocument(currentDocument);
+    }, COLLAB_SYNC_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [bootstrapQuery.data, canEdit, content, title]);
 
   useEffect(() => {
     if (documentId && saveMutation.isPending) {

@@ -15,6 +15,12 @@ import type {
 } from "../lib/types";
 import { getInitials } from "../lib/utils";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+
+function toWebSocketUrl(baseUrl: string) {
+  return baseUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+}
+
 function mapDocument(document: DocumentDto): DocumentDetails {
   return {
     id: document.id,
@@ -78,9 +84,9 @@ export const documentsClient = {
         isAiEnabled: document.isAiEnabled
       },
       collab: {
-        provider: "mock-local",
+        provider: "websocket",
         roomId: `doc_${documentId}`,
-        websocketUrl: null,
+        websocketUrl: `${toWebSocketUrl(API_BASE_URL)}/ws`,
         token: null
       },
       presence: {

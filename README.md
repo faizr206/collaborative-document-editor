@@ -111,3 +111,42 @@ Then open:
 ```text
 http://localhost:5173
 ```
+## Real-Time Collaboration 
+
+### Implementation
+The real-time feature was implemented using WebSockets in the backend.
+
+- A WebSocket endpoint (`/ws`) was created
+- Multiple users can connect simultaneously
+- Messages are broadcast to all connected users
+- Active users are tracked
+
+### Presence
+- When a user connects, all clients receive a "User joined" message
+- When a user disconnects, all clients receive a "User left" message
+
+### Testing
+
+#### Manual Testing
+- Open the application in two browser tabs
+- Send a message in one tab
+- The message appears instantly in the other tab
+- Closing a tab shows a "user left" message
+
+#### Automated Testing
+Automated backend tests were implemented using FastAPI TestClient.
+
+These tests verify:
+- successful WebSocket connection
+- message broadcasting between multiple clients
+- proper handling of client connections
+
+All tests passed successfully.
+
+### Architecture Deviation
+
+In Assignment 1, real-time collaboration was designed as a separate service.
+
+In this implementation, it was integrated directly into the backend for simplicity and easier local testing.
+
+While separating it into its own service could improve scalability, combining it is sufficient for this assignment.

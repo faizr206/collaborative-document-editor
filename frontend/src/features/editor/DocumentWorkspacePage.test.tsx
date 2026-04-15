@@ -71,7 +71,7 @@ vi.mock("../../services/exportsClient", () => ({
 }));
 
 vi.mock("../../services/collabAdapter", () => ({
-  mockCollabAdapter: {
+  collabAdapter: {
     connect: (...args: unknown[]) => mockConnect(...args)
   }
 }));
@@ -146,9 +146,9 @@ describe("DocumentWorkspacePage", () => {
         isAiEnabled: true
       },
       collab: {
-        provider: "mock-local",
+        provider: "websocket",
         roomId: "doc_42",
-        websocketUrl: null,
+        websocketUrl: "ws://127.0.0.1:8000/ws",
         token: null
       },
       presence: {
@@ -210,6 +210,7 @@ describe("DocumentWorkspacePage", () => {
       });
 
       return {
+        publishDocument: vi.fn(),
         dispose: vi.fn()
       };
     });

@@ -1,46 +1,76 @@
+import type { SessionState } from "../lib/types";
+import { readStorage, writeStorage } from "../lib/storage";
 import {
   clearStoredSession,
   getStoredSession,
-  login,
-  register,
-  type AuthSession,
-  type LoginInput,
-  type RegisterInput
+  login as loginRequest,
+  register as registerRequest
 } from "../api/auth";
-import type { AuthUser, SessionState } from "../lib/types";
 
-function mapUser(session: AuthSession): AuthUser {
-  return {
-    id: `usr_${session.username}`,
-    username: session.username,
-    email: null,
-    displayName: session.username,
-    avatarUrl: null
-  };
+const BASE_URL = "http://127.0.0.1:8000";
+const STORAGE_KEY = "frontend-session";
+
+type LoginInput = {
+  username: string;
+  password: string;
+};
+
+type RegisterInput = {
+  username: string;
+  email: string;
+  password: string;
+};
+
+function saveSession(session: SessionState | null) {
+  writeStorage(STORAGE_KEY, session);
 }
 
-function mapSession(session: AuthSession): SessionState {
+function buildSession(input: {
+  username: string;
+  email?: string;
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}): SessionState {
   return {
-    user: mapUser(session),
-    accessToken: session.accessToken,
-    tokenType: session.tokenType,
-    expiresIn: session.expiresIn
+    accessToken: input.accessToken,
+    tokenType: input.tokenType,
+    expiresIn: input.expiresIn,
+    user: {
+      id: input.username,
+      username: input.username,
+      email: input.email ?? "",
+      displayName: input.username,
+      avatarUrl: null
+    }
   };
 }
 
 export const authClient = {
-  async login(input: LoginInput) {
-    const session = await login(input);
-    return mapSession(session);
+  async getSession(): Promise<SessionState | null> {
+    const authSession = getStoredSession();
+    if (authSession) {
+      const mappedSession = buildSession(authSession);
+      saveSession(mappedSession);
+      return mappedSession;
+    }
+
+    return readStorage<SessionState | null>(STORAGE_KEY, null);
   },
-  async register(input: RegisterInput) {
-    await register(input);
+
+  async login(input: LoginInput): Promise<SessionState> {
+    const authSession = await loginRequest(input);
+    const session = buildSession(authSession);
+    saveSession(session);
+    return session;
   },
-  async getSession() {
-    const session = getStoredSession();
-    return session ? mapSession(session) : null;
+
+  async register(input: RegisterInput): Promise<void> {
+    await registerRequest(input);
   },
-  async logout() {
+
+  async logout(): Promise<void> {
+    saveSession(null);
     clearStoredSession();
   }
 };
