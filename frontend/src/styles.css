@@ -166,6 +166,20 @@ body {
   .slash-command-description {
     @apply text-xs text-muted-foreground;
   }
+
+  .remote-selection-rect {
+    @apply absolute rounded-sm;
+  }
+
+  .remote-cursor-marker {
+    @apply absolute w-0;
+    border-left: 2px solid var(--remote-cursor-color);
+  }
+
+  .remote-cursor-label {
+    @apply absolute -top-6 left-[-1px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm;
+    background: var(--remote-cursor-color);
+  }
 }
 
 button,

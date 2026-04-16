@@ -39,6 +39,15 @@ export type PresenceUser = {
   initials: string;
   active: boolean;
   isSelf?: boolean;
+  activity?: "idle" | "typing" | "selecting";
+  activityLabel?: string | null;
+  cursorPos?: number | null;
+  selection?: {
+    from: number;
+    to: number;
+    text: string;
+  } | null;
+  lastActiveAt?: string | null;
 };
 
 export type CollabConnectionState =

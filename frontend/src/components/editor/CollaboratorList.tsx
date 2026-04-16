@@ -21,7 +21,12 @@ export function CollaboratorList({ collaborators }: CollaboratorListProps) {
           >
             {collaborator.initials}
           </span>
-          <span className="max-w-[96px] truncate">{collaborator.displayName}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="max-w-[120px] truncate">{collaborator.displayName}</span>
+            <span className="max-w-[120px] truncate text-[10px] uppercase tracking-[0.08em] opacity-70">
+              {collaborator.activityLabel ?? (collaborator.active ? "Online" : "Offline")}
+            </span>
+          </span>
         </div>
       ))}
     </div>

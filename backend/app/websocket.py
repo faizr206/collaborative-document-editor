@@ -15,6 +15,7 @@ class Connection:
     websocket: WebSocket
     client_id: str
     user: dict[str, Any]
+    awareness: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -48,7 +49,21 @@ async def broadcast(room: RoomState, message: dict[str, Any], *, exclude_client_
 
 
 def _presence_users(room: RoomState) -> list[dict[str, Any]]:
-    return [connection.user for connection in room.connections.values()]
+    return [
+        _serialize_connection_user(connection)
+        for connection in room.connections.values()
+    ]
+
+
+def _serialize_connection_user(connection: Connection) -> dict[str, Any]:
+    return {
+        **connection.user,
+        "activity": connection.awareness.get("activity", "idle"),
+        "activityLabel": connection.awareness.get("activityLabel"),
+        "cursorPos": connection.awareness.get("cursorPos"),
+        "selection": connection.awareness.get("selection"),
+        "lastActiveAt": connection.awareness.get("lastActiveAt"),
+    }
 
 
 def _ensure_room(room_id: str, initial_document: dict[str, str] | None) -> RoomState:
@@ -146,9 +161,43 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "type": "operations",
                         "roomId": room_id,
                         "clientId": client_id,
-                        "user": room.connections[client_id].user,
+                        "user": _serialize_connection_user(room.connections[client_id]),
                         "operations": operations,
                         "document": room.document.plain_text(),
+                    },
+                    exclude_client_id=client_id,
+                )
+                continue
+
+            if message_type == "awareness":
+                awareness = message.get("awareness")
+                if not isinstance(awareness, dict):
+                    await send_message(
+                        websocket,
+                        {"type": "error", "message": "Invalid awareness payload."},
+                    )
+                    continue
+
+                connection = room.connections.get(client_id)
+                if not connection:
+                    await send_message(websocket, {"type": "error", "message": "Connection not found."})
+                    continue
+
+                connection.awareness = awareness
+                await broadcast(
+                    room,
+                    {
+                        "type": "awareness",
+                        "roomId": room_id,
+                        "clientId": client_id,
+                        "user": {
+                            **connection.user,
+                            "activity": awareness.get("activity", "idle"),
+                            "activityLabel": awareness.get("activityLabel"),
+                            "cursorPos": awareness.get("cursorPos"),
+                            "selection": awareness.get("selection"),
+                            "lastActiveAt": awareness.get("lastActiveAt"),
+                        },
                     },
                     exclude_client_id=client_id,
                 )

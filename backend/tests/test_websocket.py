@@ -155,3 +155,86 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
         leave_notice = ws1.receive_json()
         assert leave_notice["type"] == "presence"
         assert leave_notice["action"] == "leave"
+
+
+def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
+    with client.websocket_connect("/ws") as ws1:
+        ws1.send_json(
+            {
+                "type": "join",
+                "roomId": "doc_presence",
+                "clientId": "client_1",
+                "user": {
+                    "userId": "usr_1",
+                    "displayName": "Alice",
+                    "color": "#111111",
+                    "initials": "A",
+                    "active": True,
+                    "isSelf": True,
+                },
+                "document": {"title": "Doc", "content": "Hello"},
+            }
+        )
+        ws1.receive_json()
+
+        with client.websocket_connect("/ws") as ws2:
+            ws2.send_json(
+                {
+                    "type": "join",
+                    "roomId": "doc_presence",
+                    "clientId": "client_2",
+                    "user": {
+                        "userId": "usr_2",
+                        "displayName": "Bob",
+                        "color": "#222222",
+                        "initials": "B",
+                        "active": True,
+                        "isSelf": True,
+                    },
+                    "document": {"title": "Doc", "content": "Hello"},
+                }
+            )
+            ws2.receive_json()
+            ws1.receive_json()
+
+            ws1.send_json(
+                {
+                    "type": "awareness",
+                    "roomId": "doc_presence",
+                    "clientId": "client_1",
+                    "awareness": {
+                        "activity": "selecting",
+                        "activityLabel": "Selecting 5 characters",
+                        "cursorPos": 5,
+                        "selection": {"from": 1, "to": 5, "text": "Hell"},
+                        "lastActiveAt": "2026-04-16T14:00:00Z",
+                    },
+                }
+            )
+
+            awareness = ws2.receive_json()
+            assert awareness["type"] == "awareness"
+            assert awareness["user"]["activity"] == "selecting"
+            assert awareness["user"]["activityLabel"] == "Selecting 5 characters"
+            assert awareness["user"]["cursorPos"] == 5
+            assert awareness["user"]["selection"] == {"from": 1, "to": 5, "text": "Hell"}
+            replica = CollaborativeDocument(title="Doc", content="Hello")
+            operations = replica.build_operations_for_document(
+                title="Doc",
+                content="Hello!",
+                actor_id="client_1",
+            )
+            ws1.send_json(
+                {
+                    "type": "operations",
+                    "roomId": "doc_presence",
+                    "clientId": "client_1",
+                    "operations": operations,
+                }
+            )
+
+            operation_update = ws2.receive_json()
+            assert operation_update["type"] == "operations"
+            assert operation_update["user"]["activity"] == "selecting"
+            assert operation_update["user"]["cursorPos"] == 5
+            assert operation_update["user"]["selection"] == {"from": 1, "to": 5, "text": "Hell"}

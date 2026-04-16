@@ -22,6 +22,17 @@ export type RemoteDocumentSnapshot = {
 
 export type CollabSubscription = {
   publishDocument: (document: { title: string; content: string }) => void;
+  publishPresence: (presence: {
+    activity: "idle" | "typing" | "selecting";
+    activityLabel: string | null;
+    cursorPos: number | null;
+    selection: {
+      from: number;
+      to: number;
+      text: string;
+    } | null;
+    lastActiveAt: string;
+  }) => void;
   dispose: () => void;
 };
 
@@ -56,6 +67,13 @@ type PresenceEvent = {
   user: PresenceUser;
 };
 
+type AwarenessEvent = {
+  type: "awareness";
+  roomId: string;
+  clientId: string;
+  user: PresenceUser;
+};
+
 type OperationsEvent = {
   type: "operations";
   roomId: string;
@@ -73,7 +91,7 @@ type ErrorEvent = {
   message: string;
 };
 
-type CollabEvent = SyncEvent | PresenceEvent | OperationsEvent | ErrorEvent;
+type CollabEvent = SyncEvent | PresenceEvent | AwarenessEvent | OperationsEvent | ErrorEvent;
 
 function createClientId() {
   return `client_${Math.random().toString(36).slice(2, 10)}`;
@@ -94,6 +112,26 @@ function parseEvent(raw: string): CollabEvent | null {
 
 function hasOperations(operations: DocumentOperations) {
   return operations.title.length > 0 || operations.content.length > 0;
+}
+
+function mergeCollaboratorState(
+  current: PresenceUser | undefined,
+  incoming: PresenceUser,
+  fallback: PresenceUser | undefined
+) {
+  return {
+    ...(fallback ?? {}),
+    ...(current ?? {}),
+    ...incoming,
+    active: incoming.active ?? current?.active ?? fallback?.active ?? true
+  } satisfies PresenceUser;
+}
+
+function normalizeCollaborator(incoming: PresenceUser, selfUserId: string) {
+  return {
+    ...incoming,
+    isSelf: incoming.userId === selfUserId
+  } satisfies PresenceUser;
 }
 
 export const collabAdapter: CollabAdapter = {
@@ -173,7 +211,11 @@ export const collabAdapter: CollabAdapter = {
           isSynced = true;
           collaborators.clear();
           for (const collaborator of payload.collaborators) {
-            collaborators.set(collaborator.userId, collaborator);
+            const current = collaborators.get(collaborator.userId);
+            collaborators.set(
+              collaborator.userId,
+              mergeCollaboratorState(current, normalizeCollaborator(collaborator, self.userId), undefined)
+            );
           }
           collaborators.set(self.userId, {
             ...self,
@@ -199,12 +241,35 @@ export const collabAdapter: CollabAdapter = {
           if (payload.action === "leave") {
             collaborators.delete(payload.user.userId);
           } else {
-            collaborators.set(payload.user.userId, {
-              ...payload.user,
-              active: true
-            });
+            const current = collaborators.get(payload.user.userId);
+            collaborators.set(
+              payload.user.userId,
+              mergeCollaboratorState(
+                current,
+                normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+                undefined
+              )
+            );
           }
 
+          emitSnapshot("connected");
+          return;
+        }
+
+        if (payload.type === "awareness") {
+          if (payload.clientId === clientId) {
+            return;
+          }
+
+          const current = collaborators.get(payload.user.userId);
+          collaborators.set(
+            payload.user.userId,
+            mergeCollaboratorState(
+              current,
+              normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+              undefined
+            )
+          );
           emitSnapshot("connected");
           return;
         }
@@ -215,10 +280,15 @@ export const collabAdapter: CollabAdapter = {
           }
 
           documentState.applyOperations(payload.operations);
-          collaborators.set(payload.user.userId, {
-            ...payload.user,
-            active: true
-          });
+          const current = collaborators.get(payload.user.userId);
+          collaborators.set(
+            payload.user.userId,
+            mergeCollaboratorState(
+              current,
+              normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+              undefined
+            )
+          );
           emitSnapshot("connected");
           onRemoteDocument({
             ...documentState.text(),
@@ -270,6 +340,31 @@ export const collabAdapter: CollabAdapter = {
             roomId: bootstrap.collab.roomId,
             clientId,
             operations
+          })
+        );
+      },
+      publishPresence(presence) {
+        collaborators.set(self.userId, {
+          ...self,
+          active: true,
+          activity: presence.activity,
+          activityLabel: presence.activityLabel,
+          cursorPos: presence.cursorPos,
+          selection: presence.selection,
+          lastActiveAt: presence.lastActiveAt
+        });
+        emitSnapshot("connected");
+
+        if (!socket || socket.readyState !== WebSocket.OPEN || !isSynced) {
+          return;
+        }
+
+        socket.send(
+          JSON.stringify({
+            type: "awareness",
+            roomId: bootstrap.collab.roomId,
+            clientId,
+            awareness: presence
           })
         );
       },
