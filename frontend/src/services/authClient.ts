@@ -65,7 +65,9 @@ async function enrichAuthSession() {
     setStoredSession(enriched);
     return buildSession(enriched);
   } catch {
-    return buildSession(authSession);
+    clearStoredSession();
+    saveSession(null);
+    return null;
   }
 }
 

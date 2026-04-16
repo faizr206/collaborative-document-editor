@@ -144,6 +144,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
 
     const subscription = collabAdapter.connect({
       bootstrap: bootstrapQuery.data,
+      initialDocument: latestDocumentRef.current,
       onChange(snapshot) {
         setCollaborators(snapshot.collaborators);
         setConnection(documentsClient.getConnectionIndicator(snapshot.connectionState));
