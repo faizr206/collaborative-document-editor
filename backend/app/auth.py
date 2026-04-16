@@ -10,10 +10,10 @@ from typing import Annotated
 from sqlmodel import Session, select
 from app.db import get_session, engine
 from app.models import User
+from app.config import JWT_ALGORITHM, JWT_SECRET_KEY, TOKEN_EXPIRY_SECONDS
 
-SECRET_KEY = "hardcoded_funny_lockpick69"
-ALGORITHM = "HS256"
-TOKEN_EXPIRY_SECONDS = 30*60
+SECRET_KEY = JWT_SECRET_KEY
+ALGORITHM = JWT_ALGORITHM
 
 def hash_password(password: str) -> str:
      return hashlib.sha256(password.encode()).hexdigest()

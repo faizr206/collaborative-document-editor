@@ -25,7 +25,9 @@ const {
     create: vi.fn()
   },
   mockAiClient: {
-    createSuggestion: vi.fn()
+    streamSuggestion: vi.fn(),
+    listHistory: vi.fn(),
+    reviewSuggestion: vi.fn()
   },
   mockExportsClient: {
     start: vi.fn()
@@ -126,7 +128,7 @@ describe("DocumentWorkspacePage", () => {
     mockUseSession.mockReturnValue({
       session: {
         user: {
-          id: "usr_1",
+          id: "1",
           username: "alice",
           displayName: "Alice",
           avatarUrl: null
@@ -177,17 +179,27 @@ describe("DocumentWorkspacePage", () => {
       }
     ]);
     mockVersionsClient.create.mockResolvedValue(undefined);
-    mockAiClient.createSuggestion.mockResolvedValue({
-      id: "ai_1",
-      type: "rewrite",
-      status: "completed",
-      sourceText: "Selected text",
-      contextText: "Strategy Memo",
-      instruction: "Make it sharper",
-      resultText: "Sharper text",
-      createdAt: "2026-04-15T10:00:00Z",
-      updatedAt: "2026-04-15T10:01:00Z"
-    });
+    mockAiClient.listHistory.mockResolvedValue([]);
+    mockAiClient.reviewSuggestion.mockResolvedValue(undefined);
+    mockAiClient.streamSuggestion.mockImplementation(
+      (
+        _input: unknown,
+        callbacks: {
+          onStart?: (payload: { requestId: string; interactionId: number; status: string }) => void;
+          onChunk?: (payload: { requestId: string; interactionId: number; delta: string; text: string }) => void;
+          onComplete?: (payload: { requestId: string; interactionId: number; status: string; text: string }) => void;
+        }
+      ) => {
+        callbacks.onStart?.({ requestId: "req_1", interactionId: 11, status: "pending" });
+        callbacks.onChunk?.({ requestId: "req_1", interactionId: 11, delta: "Sharper", text: "Sharper" });
+        callbacks.onComplete?.({ requestId: "req_1", interactionId: 11, status: "completed", text: "Sharper text" });
+
+        return {
+          cancel: vi.fn().mockResolvedValue(undefined),
+          done: Promise.resolve()
+        };
+      }
+    );
     mockExportsClient.start.mockResolvedValue({
       id: "export_1",
       status: "completed",
@@ -219,7 +231,7 @@ describe("DocumentWorkspacePage", () => {
   it("renders document controls and the snapshots panel", async () => {
     renderWithProviders(<DocumentWorkspacePage documentId={42} />);
 
-    expect(await screen.findByText("Strategy Memo")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Strategy Memo")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create snapshot/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export PDF/i })).toBeInTheDocument();
     expect(screen.getByText("Snapshots")).toBeInTheDocument();
@@ -231,24 +243,49 @@ describe("DocumentWorkspacePage", () => {
 
     renderWithProviders(<DocumentWorkspacePage documentId={42} />);
 
-    await screen.findByText("Strategy Memo");
+    await screen.findByDisplayValue("Strategy Memo");
     await user.click(screen.getByRole("button", { name: "Select example" }));
     await user.type(screen.getByPlaceholderText("Ask AI for help..."), "Make it sharper");
-    await user.click(screen.getByRole("button", { name: "Send AI request" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     await screen.findByDisplayValue("Sharper text");
-    expect(mockAiClient.createSuggestion).toHaveBeenCalledWith(
+    expect(mockAiClient.streamSuggestion).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "rewrite",
         sourceText: "Selected text",
-        instruction: "Make it sharper"
-      })
+        instruction: "Make it sharper",
+        documentId: 42,
+        userId: 1
+      }),
+      expect.any(Object)
     );
 
     await user.click(screen.getByRole("button", { name: /Apply suggestion/i }));
 
     await waitFor(() => {
       expect(insertContentAt).toHaveBeenCalledWith({ from: 1, to: 5 }, "Sharper text");
+    });
+  });
+
+  it("allows changing the document title from the workspace", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<DocumentWorkspacePage documentId={42} />);
+
+    const titleInput = (await screen.findByRole("textbox", { name: "Document title" })) as HTMLInputElement;
+    await user.click(titleInput);
+    titleInput.setSelectionRange(0, titleInput.value.length);
+    await user.keyboard("{Backspace}");
+    await user.type(titleInput, "Updated strategy memo");
+    await user.tab();
+
+    await waitFor(() => {
+      expect(mockDocumentsClient.save).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({
+          title: "Updated strategy memo"
+        })
+      );
     });
   });
 });

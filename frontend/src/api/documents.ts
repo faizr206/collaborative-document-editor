@@ -1,6 +1,5 @@
 import { getAccessToken } from "./auth";
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+import { API_BASE_URL } from "../config";
 
 export type DocumentDto = {
   id: number;
