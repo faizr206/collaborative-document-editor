@@ -32,6 +32,7 @@ import { cn } from "../../lib/utils";
 
 const AUTOSAVE_DELAY_MS = 1200;
 const COLLAB_SYNC_DELAY_MS = 300;
+const TYPING_ACTIVITY_RESET_MS = 1400;
 
 type DocumentWorkspacePageProps = {
   documentId: number;
@@ -77,6 +78,10 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
   const aiStreamHandleRef = useRef<ReturnType<typeof aiClient.streamSuggestion> | null>(null);
   const latestDocumentRef = useRef({ title: "", content: "" });
   const [isDocumentHydrated, setIsDocumentHydrated] = useState(false);
+  const remoteCollaborators = useMemo(
+    () => collaborators.filter((collaborator) => !collaborator.isSelf),
+    [collaborators]
+  );
 
   const documentQuery = useQuery({
     queryKey: ["documents", documentId],
@@ -287,6 +292,80 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
       window.clearTimeout(timeoutId);
     };
   }, [bootstrapQuery.data, canEdit, content, isDocumentHydrated, title]);
+
+  useEffect(() => {
+    const subscription = collabSubscriptionRef.current;
+    if (!subscription || !canEdit || !bootstrapQuery.data || !isDocumentHydrated) {
+      return;
+    }
+
+    subscription.publishPresence({
+      activity: selection.text ? "selecting" : "idle",
+      activityLabel: selection.text ? `Selecting ${Math.max(selection.to - selection.from, 0)} characters` : null,
+      cursorPos: selection.to || 1,
+      selection: selection.text
+        ? {
+            from: selection.from,
+            to: selection.to,
+            text: selection.text
+          }
+        : null,
+      lastActiveAt: new Date().toISOString()
+    });
+  }, [bootstrapQuery.data, canEdit, isDocumentHydrated, selection]);
+
+  useEffect(() => {
+    const subscription = collabSubscriptionRef.current;
+    if (!subscription || !canEdit || !bootstrapQuery.data || !isDocumentHydrated) {
+      return;
+    }
+
+    const pendingRemoteDocument = pendingRemoteDocumentRef.current;
+    const currentDocument = { title, content };
+    if (
+      pendingRemoteDocument &&
+      pendingRemoteDocument.title === currentDocument.title &&
+      pendingRemoteDocument.content === currentDocument.content
+    ) {
+      return;
+    }
+
+    subscription.publishPresence({
+      activity: "typing",
+      activityLabel: "Typing...",
+      cursorPos: selection.to || 1,
+      selection: selection.text
+        ? {
+            from: selection.from,
+            to: selection.to,
+            text: selection.text
+          }
+        : null,
+      lastActiveAt: new Date().toISOString()
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      subscription.publishPresence({
+        activity: selection.text ? "selecting" : "idle",
+        activityLabel: selection.text
+          ? `Selecting ${Math.max(selection.to - selection.from, 0)} characters`
+          : "Active in document",
+        cursorPos: selection.to || 1,
+        selection: selection.text
+          ? {
+              from: selection.from,
+              to: selection.to,
+              text: selection.text
+            }
+          : null,
+        lastActiveAt: new Date().toISOString()
+      });
+    }, TYPING_ACTIVITY_RESET_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [bootstrapQuery.data, canEdit, content, isDocumentHydrated, selection.from, selection.text, selection.to, title]);
 
   useEffect(() => {
     return () => {
@@ -790,6 +869,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                       onEditorChange={setEditor}
                       editable={canEdit}
                       onSelectionChange={setSelection}
+                      remotePresences={remoteCollaborators}
                     />
                   )}
                 </CardContent>

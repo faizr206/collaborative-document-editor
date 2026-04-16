@@ -1,8 +1,9 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createEditorExtensions } from "./extensions";
 import { promptForLink } from "./editorActions";
+import type { PresenceUser } from "../../lib/types";
 
 type TiptapEditorProps = {
   content: string;
@@ -10,6 +11,24 @@ type TiptapEditorProps = {
   onEditorChange: (editor: Editor | null) => void;
   onSelectionChange?: (selection: { from: number; to: number; text: string }) => void;
   editable?: boolean;
+  remotePresences?: PresenceUser[];
+};
+
+type RemoteSelectionRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  color: string;
+};
+
+type RemoteCursorMarker = {
+  userId: string;
+  left: number;
+  top: number;
+  height: number;
+  color: string;
+  label: string;
 };
 
 type SlashCommand = {
@@ -91,9 +110,12 @@ export function TiptapEditor({
   onContentChange,
   onEditorChange,
   onSelectionChange,
-  editable = true
+  editable = true,
+  remotePresences = []
 }: TiptapEditorProps) {
   const extensions = useMemo(() => createEditorExtensions(), []);
+  const [remoteSelectionRects, setRemoteSelectionRects] = useState<RemoteSelectionRect[]>([]);
+  const [remoteCursorMarkers, setRemoteCursorMarkers] = useState<RemoteCursorMarker[]>([]);
   const editor = useEditor({
     extensions,
     content: toEditorHtml(content),
@@ -141,17 +163,129 @@ export function TiptapEditor({
 
     const nextContent = toEditorHtml(content);
     if (editor.getHTML() !== nextContent) {
+      const { from, to } = editor.state.selection;
       editor.commands.setContent(nextContent, { emitUpdate: false });
+      const nextDocSize = Math.max(1, editor.state.doc.content.size);
+      const nextFrom = Math.max(1, Math.min(from, nextDocSize));
+      const nextTo = Math.max(nextFrom, Math.min(to, nextDocSize));
+      editor.commands.setTextSelection({ from: nextFrom, to: nextTo });
     }
   }, [content, editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      setRemoteSelectionRects([]);
+      setRemoteCursorMarkers([]);
+      return;
+    }
+
+    const updateRemoteDecorations = () => {
+      const view = editor.view;
+      const editorRect = view.dom.getBoundingClientRect();
+      const maxPos = Math.max(1, view.state.doc.content.size);
+      const nextRects: RemoteSelectionRect[] = [];
+      const nextCursors: RemoteCursorMarker[] = [];
+
+      for (const presence of remotePresences) {
+        const startPos = clampPosition(presence.selection?.from ?? presence.cursorPos ?? 1, maxPos);
+        const endPos = clampPosition(presence.selection?.to ?? presence.cursorPos ?? startPos, maxPos);
+        const cursorPos = clampPosition(presence.cursorPos ?? endPos, maxPos);
+
+        if (presence.selection && presence.selection.from !== presence.selection.to) {
+          const range = document.createRange();
+          const start = view.domAtPos(startPos);
+          const end = view.domAtPos(endPos);
+          range.setStart(start.node, start.offset);
+          range.setEnd(end.node, end.offset);
+
+          for (const rect of Array.from(range.getClientRects())) {
+            if (!rect.width && !rect.height) {
+              continue;
+            }
+
+            nextRects.push({
+              left: rect.left - editorRect.left,
+              top: rect.top - editorRect.top,
+              width: rect.width,
+              height: rect.height,
+              color: presence.color
+            });
+          }
+        }
+
+        const coords = view.coordsAtPos(cursorPos);
+        nextCursors.push({
+          userId: presence.userId,
+          left: coords.left - editorRect.left,
+          top: coords.top - editorRect.top,
+          height: Math.max(coords.bottom - coords.top, 20),
+          color: presence.color,
+          label: presence.displayName
+        });
+      }
+
+      setRemoteSelectionRects(nextRects);
+      setRemoteCursorMarkers(nextCursors);
+    };
+
+    updateRemoteDecorations();
+    window.addEventListener("resize", updateRemoteDecorations);
+    window.addEventListener("scroll", updateRemoteDecorations, true);
+    editor.on("selectionUpdate", updateRemoteDecorations);
+    editor.on("update", updateRemoteDecorations);
+
+    return () => {
+      window.removeEventListener("resize", updateRemoteDecorations);
+      window.removeEventListener("scroll", updateRemoteDecorations, true);
+      editor.off("selectionUpdate", updateRemoteDecorations);
+      editor.off("update", updateRemoteDecorations);
+    };
+  }, [editor, remotePresences]);
 
   return (
     <div className="relative">
       {editor ? <InlineBubbleMenu editor={editor} /> : null}
       {editor ? <SlashCommandMenu editor={editor} /> : null}
+      <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+        {remoteSelectionRects.map((rect, index) => (
+          <span
+            key={`${rect.color}-${rect.left}-${rect.top}-${index}`}
+            className="remote-selection-rect"
+            style={{
+              left: `${rect.left}px`,
+              top: `${rect.top}px`,
+              width: `${rect.width}px`,
+              height: `${rect.height}px`,
+              backgroundColor: `${rect.color}33`
+            }}
+          />
+        ))}
+        {remoteCursorMarkers.map((marker) => (
+          <span
+            key={marker.userId}
+            className="remote-cursor-marker"
+            style={{
+              left: `${marker.left}px`,
+              top: `${marker.top}px`,
+              height: `${marker.height}px`,
+              "--remote-cursor-color": marker.color
+            } as CSSProperties}
+          >
+            <span className="remote-cursor-label">{marker.label}</span>
+          </span>
+        ))}
+      </div>
       <EditorContent editor={editor} />
     </div>
   );
+}
+
+function clampPosition(value: number, maxPos: number) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.min(Math.trunc(value), maxPos));
 }
 
 function InlineBubbleMenu({ editor }: { editor: Editor }) {

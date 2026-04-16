@@ -10,6 +10,7 @@ const {
   mockAiClient,
   mockExportsClient,
   mockConnect,
+  mockPublishPresence,
   insertContentAt,
   editorMock
 } = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ const {
     start: vi.fn()
   },
   mockConnect: vi.fn(),
+  mockPublishPresence: vi.fn(),
   insertContentAt: vi.fn(),
   editorMock: {
   chain: () => ({
@@ -83,17 +85,20 @@ vi.mock("../../components/editor/TiptapEditor", () => ({
     content,
     editable,
     onSelectionChange,
-    onEditorChange
+    onEditorChange,
+    remotePresences
   }: {
     content: string;
     editable?: boolean;
     onSelectionChange?: (value: { from: number; to: number; text: string }) => void;
     onEditorChange: (editor: unknown) => void;
+    remotePresences?: Array<{ userId: string; displayName: string }>;
   }) => (
     <div>
       <div data-testid="mock-editor" data-editable={editable ? "true" : "false"}>
         {content}
       </div>
+      <div data-testid="remote-presence-count">{remotePresences?.length ?? 0}</div>
       <button
         type="button"
         onClick={() => {
@@ -223,6 +228,7 @@ describe("DocumentWorkspacePage", () => {
 
       return {
         publishDocument: vi.fn(),
+        publishPresence: mockPublishPresence,
         dispose: vi.fn()
       };
     });
@@ -287,5 +293,45 @@ describe("DocumentWorkspacePage", () => {
         })
       );
     });
+  });
+
+  it("renders remote collaborator activity from presence updates", async () => {
+    mockConnect.mockImplementation(({ onChange }: { onChange: (value: unknown) => void }) => {
+      onChange({
+        collaborators: [
+          {
+            userId: "usr_1",
+            displayName: "Alice",
+            color: "#295eff",
+            initials: "A",
+            active: true,
+            isSelf: true
+          },
+          {
+            userId: "usr_2",
+            displayName: "Bob",
+            color: "#ef6c4d",
+            initials: "B",
+            active: true,
+            isSelf: false,
+            activity: "typing",
+            activityLabel: "Typing..."
+          }
+        ],
+        connectionState: "connected"
+      });
+
+      return {
+        publishDocument: vi.fn(),
+        publishPresence: mockPublishPresence,
+        dispose: vi.fn()
+      };
+    });
+
+    renderWithProviders(<DocumentWorkspacePage documentId={42} />);
+
+    expect(await screen.findByText("Bob")).toBeInTheDocument();
+    expect(screen.getByText("Typing...")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-presence-count")).toHaveTextContent("1");
   });
 });
