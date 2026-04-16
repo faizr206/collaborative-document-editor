@@ -13,6 +13,7 @@ class User(SQLModel, table=True):
      email: str = Field(index=True, unique=True)
      created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
      password_hash: str
+     is_admin: int = Field(default=0)
 
 class Document(SQLModel, table=True):
      __tablename__ = "documents"

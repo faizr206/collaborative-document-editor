@@ -2,6 +2,7 @@
 db.py - Database setup and connection for the collaborative document editor application.
 """
 
+import hashlib
 from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine, select
 
@@ -18,7 +19,19 @@ def get_session():
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    _ensure_user_is_admin_column()
     _ensure_ai_interaction_columns()
+
+
+def _ensure_user_is_admin_column():
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "is_admin" not in existing_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
 
 
 def _ensure_ai_interaction_columns():
@@ -49,10 +62,23 @@ def _ensure_ai_interaction_columns():
                 connection.execute(text(statement))
 
 
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
 def create_default_user():
     with Session(engine) as session:
-        existing_user = session.exec(select(User).where(User.id == 1)).first()
+        existing_admin = session.exec(select(User).where(User.username == "admin")).first()
+        if not existing_admin:
+            admin_user = User(
+                username="admin",
+                email="admin@example.com",
+                password_hash=_hash_password("pass123"),
+                is_admin=1,
+            )
+            session.add(admin_user)
 
+        existing_user = session.exec(select(User).where(User.id == 1)).first()
         if not existing_user:
             user = User(
                 username="testuser",
@@ -60,4 +86,5 @@ def create_default_user():
                 password_hash="fakehash",
             )
             session.add(user)
-            session.commit()
+
+        session.commit()

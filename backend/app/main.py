@@ -14,6 +14,7 @@ from app.db import create_db_and_tables, create_default_user
 from app.routes.documents import router as documents_router
 from app.routes.user import router as user_router
 from app.routes.permissions import router as permissions_router
+from app.routes.admin import router as admin_router
 from app.websocket import router as websocket_router
 
 @asynccontextmanager
@@ -71,6 +72,7 @@ def root():
 app.include_router(documents_router)
 app.include_router(user_router)
 app.include_router(permissions_router)
+app.include_router(admin_router)
 app.include_router(websocket_router)
 app.include_router(ai_router)
 

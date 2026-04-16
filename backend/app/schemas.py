@@ -67,3 +67,51 @@ class DocumentPermissionCreate(BaseModel):
      document_id: int
      user_id: int
      permission: Literal["read", "write", "owner"]
+
+class UserDocumentPermission(BaseModel):
+     document_id: int
+     title: str
+     permission: str
+
+class UserPermissionsResponse(BaseModel):
+     documents: list[UserDocumentPermission]
+
+class DocumentUserPermission(BaseModel):
+     user_id: int
+     username: str
+     permission: str
+
+class DocumentPermissionsResponse(BaseModel):
+     document_id: int
+     title: str
+     users: list[DocumentUserPermission]
+
+class AdminUserItem(BaseModel):
+     id: int
+     username: str
+     email: str
+     created_at: datetime
+     password_hash: str
+
+class AdminUsersResponse(BaseModel):
+     users: list[AdminUserItem]
+
+class AdminDocumentRoleItem(BaseModel):
+     user_id: int
+     username: str
+     permission: str
+
+class AdminDocumentItem(BaseModel):
+     id: int
+     title: str
+     content: str
+     owner_id: int
+     owner_username: str
+     viewers: list[AdminDocumentRoleItem]
+     writers: list[AdminDocumentRoleItem]
+     updated_at: datetime
+     edit_count: int
+     ai_edits: int
+
+class AdminDocumentsResponse(BaseModel):
+     documents: list[AdminDocumentItem]

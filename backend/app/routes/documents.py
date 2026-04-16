@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
-from app.models import Document
+from app.models import Document, DocumentPermission
 from app.schemas import (
     DocumentCreate,
     DocumentListItem,
@@ -12,6 +12,7 @@ from app.schemas import (
 from app.db import get_session
 from app.auth import CurrentUser
 from datetime import datetime, timezone
+from sqlmodel import or_
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 temp_owner_id = 1
@@ -54,6 +55,15 @@ def create_document(
     session.commit()
     session.refresh(new_doc)
 
+    # Add owner permission entry
+    owner_permission = DocumentPermission(
+        document_id=new_doc.id,
+        user_id=current_user.id,
+        permission="owner"
+    )
+    session.add(owner_permission)
+    session.commit()
+
     return serialize_document(new_doc)
 
 @router.get("", response_model=DocumentListResponse)
@@ -61,6 +71,34 @@ def list_all_documents(
         session: Session = Depends(get_session)
 ):
     documents = session.exec(select(Document)).all()
+    items = [
+        DocumentListItem(
+            id=document.id,
+            title=document.title,
+            updatedAt=serialize_timestamp(document.updated_at)
+        )
+        for document in documents
+    ]
+    return {"data": {"items": items}}
+
+@router.get("/my/documents", response_model=DocumentListResponse)
+def list_documents_of_cur_user(
+    current_user: CurrentUser,
+    session: Session = Depends(get_session)
+):
+    permission_ids = select(DocumentPermission.document_id).where(
+        DocumentPermission.user_id == current_user.id,
+        DocumentPermission.permission.in_(["read", "write", "owner"])
+    )
+    documents = session.exec(
+        select(Document).where(
+            or_(
+                Document.owner_id == current_user.id,
+                Document.id.in_(permission_ids)
+            )
+        )
+    ).all()
+
     items = [
         DocumentListItem(
             id=document.id,

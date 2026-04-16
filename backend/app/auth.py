@@ -62,4 +62,10 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
      except jwt.InvalidTokenError as e:
           print("JWT decode error:", repr(e))
           raise HTTPException(status_code=401, detail="Invalid token")
+
 CurrentUser = Annotated[User, Depends(verify_token)]
+
+async def ensure_admin(current_user: User = Depends(verify_token)) -> User:
+     if getattr(current_user, "is_admin", 0) != 1:
+          raise HTTPException(status_code=403, detail="Admin privileges required")
+     return current_user
