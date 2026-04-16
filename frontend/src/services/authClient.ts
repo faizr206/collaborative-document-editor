@@ -2,9 +2,11 @@ import type { SessionState } from "../lib/types";
 import { readStorage, writeStorage } from "../lib/storage";
 import {
   clearStoredSession,
+  getCurrentUser,
   getStoredSession,
   login as loginRequest,
-  register as registerRequest
+  register as registerRequest,
+  setStoredSession
 } from "../api/auth";
 
 const STORAGE_KEY = "frontend-session";
@@ -25,8 +27,9 @@ function saveSession(session: SessionState | null) {
 }
 
 function buildSession(input: {
+  userId?: string;
   username: string;
-  email?: string;
+  email?: string | null;
   accessToken: string;
   tokenType: string;
   expiresIn: number;
@@ -36,7 +39,7 @@ function buildSession(input: {
     tokenType: input.tokenType,
     expiresIn: input.expiresIn,
     user: {
-      id: input.username,
+      id: input.userId ?? input.username,
       username: input.username,
       email: input.email ?? "",
       displayName: input.username,
@@ -45,11 +48,31 @@ function buildSession(input: {
   };
 }
 
+async function enrichAuthSession() {
+  const authSession = getStoredSession();
+  if (!authSession) {
+    return null;
+  }
+
+  try {
+    const currentUser = await getCurrentUser();
+    const enriched = {
+      ...authSession,
+      userId: String(currentUser.id),
+      username: currentUser.username,
+      email: currentUser.email ?? authSession.email ?? null
+    };
+    setStoredSession(enriched);
+    return buildSession(enriched);
+  } catch {
+    return buildSession(authSession);
+  }
+}
+
 export const authClient = {
   async getSession(): Promise<SessionState | null> {
-    const authSession = getStoredSession();
-    if (authSession) {
-      const mappedSession = buildSession(authSession);
+    const mappedSession = await enrichAuthSession();
+    if (mappedSession) {
       saveSession(mappedSession);
       return mappedSession;
     }
@@ -59,7 +82,15 @@ export const authClient = {
 
   async login(input: LoginInput): Promise<SessionState> {
     const authSession = await loginRequest(input);
-    const session = buildSession(authSession);
+    const currentUser = await getCurrentUser();
+    const enrichedSession = {
+      ...authSession,
+      userId: String(currentUser.id),
+      username: currentUser.username,
+      email: currentUser.email ?? null
+    };
+    setStoredSession(enrichedSession);
+    const session = buildSession(enrichedSession);
     saveSession(session);
     return session;
   },

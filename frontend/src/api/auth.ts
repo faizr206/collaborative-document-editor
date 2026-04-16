@@ -17,10 +17,21 @@ type LoginResponse = {
 };
 
 export type AuthSession = {
+  userId?: string;
   username: string;
+  email?: string | null;
   accessToken: string;
   tokenType: string;
   expiresIn: number;
+};
+
+export type CurrentUserResponse = {
+  message: string;
+  user: {
+    id: number;
+    username: string;
+    email?: string | null;
+  };
 };
 
 export type LoginInput = {
@@ -90,6 +101,22 @@ export function getAccessToken(): string | null {
   return getStoredSession()?.accessToken ?? null;
 }
 
+export async function getCurrentUser(): Promise<CurrentUserResponse["user"]> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new Error("No access token found.");
+  }
+
+  const response = await requestJson<CurrentUserResponse>("/user_auth/quick_secure_test", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  return response.user;
+}
+
 export async function login(input: LoginInput): Promise<AuthSession> {
   const response = await requestJson<LoginResponse>("/user_auth/login", {
     method: "POST",
@@ -97,7 +124,9 @@ export async function login(input: LoginInput): Promise<AuthSession> {
   });
 
   const session = {
+    userId: undefined,
     username: input.username,
+    email: null,
     accessToken: response.access_token,
     tokenType: response.token_type,
     expiresIn: response.expires_in

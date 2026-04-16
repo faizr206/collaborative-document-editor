@@ -33,7 +33,27 @@ def get_list(name: str, default: list[str]) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-DATABASE_URL = get_str("DATABASE_URL", "sqlite:///./sqlite.db")
+def resolve_database_url(raw_url: str) -> str:
+    if not raw_url.startswith("sqlite:///"):
+        return raw_url
+
+    sqlite_path = raw_url.removeprefix("sqlite:///")
+    if sqlite_path == ":memory:" or sqlite_path.startswith("/"):
+        return raw_url
+
+    normalized = sqlite_path.removeprefix("./")
+
+    # Preserve the historical backend-local sqlite file even when the server is
+    # launched from the repo root.
+    if normalized in {"sqlite.db", "backend/sqlite.db"}:
+        resolved_path = ROOT_DIR / "backend" / "sqlite.db"
+    else:
+        resolved_path = ROOT_DIR / normalized
+
+    return f"sqlite:///{resolved_path.resolve()}"
+
+
+DATABASE_URL = resolve_database_url(get_str("DATABASE_URL", "sqlite:///backend/sqlite.db"))
 JWT_SECRET_KEY = get_str("JWT_SECRET_KEY", "change-me-in-env")
 JWT_ALGORITHM = get_str("JWT_ALGORITHM", "HS256")
 TOKEN_EXPIRY_SECONDS = get_int("TOKEN_EXPIRY_SECONDS", 30 * 60)
