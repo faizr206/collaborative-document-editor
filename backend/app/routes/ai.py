@@ -29,6 +29,10 @@ class AIRequest(BaseModel):
     document_content: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
 
+class AIAcceptRequest(BaseModel):
+    suggestion: str
+    accepted_parts: list[int]
+
 
 class AIReviewRequest(BaseModel):
     review_status: str
@@ -147,6 +151,10 @@ def update_interaction(
 
 def format_sse_event(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+def split_suggestion_parts(suggestion: str) -> list[str]:
+    parts = [part.strip() for part in suggestion.split(".") if part.strip()]
+    return [f"{part}." for part in parts]
 
 
 @router.get("/capabilities")
@@ -377,3 +385,23 @@ def review_ai_interaction(
     session.refresh(interaction)
 
     return {"data": serialize_interaction(interaction)}
+
+@router.post("/partial-accept")
+def partial_accept_ai_suggestion(payload: AIAcceptRequest):
+    parts = split_suggestion_parts(payload.suggestion)
+
+    accepted = [
+        parts[index]
+        for index in payload.accepted_parts
+        if 0 <= index < len(parts)
+    ]
+
+    final_text = " ".join(accepted).strip()
+
+    return {
+        "data": {
+            "parts": parts,
+            "acceptedParts": payload.accepted_parts,
+            "resultText": final_text,
+        }
+    }
