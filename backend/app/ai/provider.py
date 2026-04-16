@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import json
 import re
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Protocol
+
+import httpx
+from app.config import (
+    AI_PROVIDER,
+    LM_STUDIO_API_KEY,
+    LM_STUDIO_BASE_URL,
+    LM_STUDIO_MODEL,
+    LM_STUDIO_TIMEOUT_SECONDS,
+)
+
+DEFAULT_LM_STUDIO_BASE_URL = LM_STUDIO_BASE_URL
+DEFAULT_LM_STUDIO_MODEL = LM_STUDIO_MODEL
 
 
 @dataclass(frozen=True)
@@ -49,11 +61,132 @@ class MockLLMProvider:
             yield full_text[index:index + chunk_size]
 
 
+class LMStudioProvider:
+    provider_name = "lmstudio"
+
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        model_name: str | None = None,
+        api_key: str | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        self.base_url = (base_url or DEFAULT_LM_STUDIO_BASE_URL).rstrip("/")
+        self.model_name = model_name or DEFAULT_LM_STUDIO_MODEL
+        self.api_key = api_key or LM_STUDIO_API_KEY
+        self.timeout = timeout or LM_STUDIO_TIMEOUT_SECONDS
+
+    async def generate(self, request: LLMGenerationRequest) -> str:
+        payload = self._build_payload(request, stream=False)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                body = response.json()
+        except httpx.HTTPError as exc:
+            raise ValueError(f"LM Studio request failed: {exc}") from exc
+
+        choices = body.get("choices") or []
+        if not choices:
+            raise ValueError("LM Studio returned no choices")
+
+        message = choices[0].get("message") or {}
+        content = message.get("content")
+        if isinstance(content, list):
+            return "".join(
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            ).strip()
+        if isinstance(content, str):
+            return content.strip()
+        raise ValueError("LM Studio returned an unsupported message content shape")
+
+    async def stream(self, request: LLMGenerationRequest) -> AsyncIterator[str]:
+        payload = self._build_payload(request, stream=True)
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers=self._headers(),
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+
+                        data = line[6:].strip()
+                        if data == "[DONE]":
+                            break
+
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError as exc:
+                            raise ValueError("LM Studio returned malformed streaming JSON") from exc
+
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+
+                        delta = choices[0].get("delta") or {}
+                        content = delta.get("content")
+                        if isinstance(content, str) and content:
+                            yield content
+        except httpx.HTTPError as exc:
+            raise ValueError(f"LM Studio streaming request failed: {exc}") from exc
+
+    def _build_payload(self, request: LLMGenerationRequest, *, stream: bool) -> dict[str, Any]:
+        return {
+            "model": self.model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": request.prompt,
+                }
+            ],
+            "temperature": self._coerce_float(request.options.get("temperature"), 0.2),
+            "max_tokens": self._coerce_int(request.options.get("max_tokens"), 512),
+            "stream": stream,
+        }
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def _coerce_float(self, value: Any, default: float) -> float:
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _coerce_int(self, value: Any, default: int) -> int:
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+
 def get_provider() -> LLMProvider:
-    provider_name = os.getenv("AI_PROVIDER", "mock").lower()
+    provider_name = AI_PROVIDER.lower()
 
     if provider_name == "mock":
         return MockLLMProvider()
+    if provider_name == "lmstudio":
+        return LMStudioProvider()
 
     raise ValueError(f"Unsupported AI provider: {provider_name}")
 

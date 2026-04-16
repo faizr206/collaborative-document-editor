@@ -7,7 +7,6 @@ import {
   register as registerRequest
 } from "../api/auth";
 
-const BASE_URL = "http://127.0.0.1:8000";
 const STORAGE_KEY = "frontend-session";
 
 type LoginInput = {

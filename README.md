@@ -31,6 +31,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Create a shared root env file before starting the apps:
+
+```bash
+cp .env.example .env
+```
+
 Start the backend server:
 
 ```bash
@@ -72,19 +78,21 @@ http://localhost:5173
 
 ## Frontend API Configuration
 
-The frontend reads the backend URL from `VITE_API_BASE_URL`.
+The frontend and backend now share the same root `.env` file.
 
-If you do not set it, the frontend uses this default:
-
-```text
-http://localhost:8000/api
-```
-
-If your backend is running at a different URL, create `frontend/.env` and set:
+Important variables in `.env.example`:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8000/api
+VITE_API_BASE_URL=http://127.0.0.1:8000
+DATABASE_URL=sqlite:///./sqlite.db
+JWT_SECRET_KEY=change-me-in-env
+AI_PROVIDER=lmstudio
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LM_STUDIO_MODEL=qwen2.5-3b-instruct
 ```
+
+The frontend reads `VITE_API_BASE_URL` from the repo root `.env`.
+The backend reads the same root `.env` automatically via `python-dotenv`.
 
 ## Run Both
 

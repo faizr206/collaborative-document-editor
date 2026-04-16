@@ -5,9 +5,8 @@ db.py - Database setup and connection for the collaborative document editor appl
 from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine, select
 
+from app.config import DATABASE_URL
 from app.models import Document, DocumentPermission, DocumentVersion, User
-
-DATABASE_URL = "sqlite:///./sqlite.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 

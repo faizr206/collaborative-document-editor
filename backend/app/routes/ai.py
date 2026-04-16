@@ -154,6 +154,8 @@ def get_ai_capabilities():
     return {
         "data": {
             "actions": ai_service.supported_actions(),
+            "provider": ai_service.provider_name,
+            "model": ai_service.model_name,
             "streamingProtocol": "sse",
             "supportsCancellation": True,
         }
