@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -37,6 +38,7 @@ class AIAcceptRequest(BaseModel):
 class AIReviewRequest(BaseModel):
     review_status: str
     edited_text: Optional[str] = None
+    accepted_parts: Optional[list[int]] = None
 
 
 def serialize_timestamp(value: Optional[datetime]) -> Optional[str]:
@@ -109,6 +111,7 @@ def create_interaction_record(
 
 
 def serialize_interaction(interaction: AIInteraction) -> dict[str, Any]:
+    suggestion_parts = split_suggestion_parts(interaction.result_text)
     return {
         "id": interaction.id,
         "requestId": interaction.request_id,
@@ -127,6 +130,7 @@ def serialize_interaction(interaction: AIInteraction) -> dict[str, Any]:
         "resultText": interaction.result_text,
         "status": interaction.status,
         "reviewStatus": interaction.review_status,
+        "suggestionParts": suggestion_parts,
         "errorMessage": interaction.error_message,
         "responseChars": interaction.response_chars,
         "createdAt": serialize_timestamp(interaction.created_at),
@@ -153,8 +157,32 @@ def format_sse_event(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 def split_suggestion_parts(suggestion: str) -> list[str]:
-    parts = [part.strip() for part in suggestion.split(".") if part.strip()]
-    return [f"{part}." for part in parts]
+    normalized = suggestion.strip()
+    if not normalized:
+        return []
+
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    if len(lines) > 1:
+        return lines
+
+    sentence_parts = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?])\s+", normalized)
+        if part.strip()
+    ]
+    return sentence_parts or [normalized]
+
+
+def build_partial_acceptance_result(suggestion: str, accepted_parts: list[int]) -> dict[str, Any]:
+    parts = split_suggestion_parts(suggestion)
+    accepted_indexes = sorted({index for index in accepted_parts if 0 <= index < len(parts)})
+    accepted = [parts[index] for index in accepted_indexes]
+    final_text = " ".join(accepted).strip()
+    return {
+        "parts": parts,
+        "acceptedParts": accepted_indexes,
+        "resultText": final_text,
+    }
 
 
 @router.get("/capabilities")
@@ -362,7 +390,7 @@ def review_ai_interaction(
     user_id: int,
     session: Session = Depends(get_session),
 ):
-    allowed_review_statuses = {"accepted", "rejected", "edited"}
+    allowed_review_statuses = {"accepted", "rejected", "edited", "partially_accepted"}
     if payload.review_status not in allowed_review_statuses:
         raise HTTPException(status_code=400, detail="Invalid review_status")
 
@@ -377,6 +405,13 @@ def review_ai_interaction(
     if payload.review_status == "edited" and payload.edited_text is not None:
         interaction.result_text = payload.edited_text
         interaction.response_chars = len(payload.edited_text)
+    elif payload.review_status == "partially_accepted":
+        accepted_parts = payload.accepted_parts or []
+        partial_acceptance = build_partial_acceptance_result(interaction.result_text, accepted_parts)
+        if not partial_acceptance["acceptedParts"]:
+            raise HTTPException(status_code=400, detail="accepted_parts must include at least one valid suggestion part")
+        interaction.result_text = partial_acceptance["resultText"]
+        interaction.response_chars = len(interaction.result_text)
     interaction.reviewed_at = datetime.now(timezone.utc)
     interaction.updated_at = interaction.reviewed_at
 
@@ -388,20 +423,4 @@ def review_ai_interaction(
 
 @router.post("/partial-accept")
 def partial_accept_ai_suggestion(payload: AIAcceptRequest):
-    parts = split_suggestion_parts(payload.suggestion)
-
-    accepted = [
-        parts[index]
-        for index in payload.accepted_parts
-        if 0 <= index < len(parts)
-    ]
-
-    final_text = " ".join(accepted).strip()
-
-    return {
-        "data": {
-            "parts": parts,
-            "acceptedParts": payload.accepted_parts,
-            "resultText": final_text,
-        }
-    }
+    return {"data": build_partial_acceptance_result(payload.suggestion, payload.accepted_parts)}

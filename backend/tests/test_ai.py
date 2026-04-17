@@ -3,13 +3,16 @@ import json
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
+from app.ai.provider import MockLLMProvider
 from app.db import create_db_and_tables, engine
 from app.main import app
 from app.models import AIInteraction, Document
+from app.routes.ai import ai_service
 
 
 def setup_function():
     create_db_and_tables()
+    ai_service.provider = MockLLMProvider()
     with Session(engine) as session:
         session.exec(delete(AIInteraction))
         session.exec(delete(Document))
@@ -124,3 +127,48 @@ def test_review_ai_interaction_updates_status():
         reviewed_payload = review_response.json()["data"]
         assert reviewed_payload["reviewStatus"] == "edited"
         assert reviewed_payload["resultText"] == "I am testing grammar."
+
+
+def test_partial_accept_ai_interaction_keeps_only_selected_parts():
+    document_id = create_document()
+
+    with TestClient(app) as client:
+        create_response = client.post(
+            "/api/ai/suggest",
+            json={
+                "action_type": "rewrite",
+                "source_text": "One. Two. Three.",
+                "context": "",
+                "instruction": "",
+                "document_id": document_id,
+                "user_id": 1,
+                "options": {},
+            },
+        )
+
+        interaction_id = create_response.json()["data"]["id"]
+
+        preview_response = client.post(
+            "/api/ai/partial-accept",
+            json={
+                "suggestion": "First sentence. Second sentence. Third sentence.",
+                "accepted_parts": [0, 2],
+            },
+        )
+        assert preview_response.status_code == 200
+        assert preview_response.json()["data"]["resultText"] == "First sentence. Third sentence."
+
+        review_response = client.post(
+            f"/api/ai/interactions/{interaction_id}/review",
+            params={"user_id": 1},
+            json={
+                "review_status": "partially_accepted",
+                "accepted_parts": [0],
+            },
+        )
+
+        assert review_response.status_code == 200
+        reviewed_payload = review_response.json()["data"]
+        assert reviewed_payload["reviewStatus"] == "partially_accepted"
+        assert reviewed_payload["resultText"]
+        assert reviewed_payload["suggestionParts"]

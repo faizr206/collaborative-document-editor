@@ -109,7 +109,13 @@ export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 export type AiRequestStatus = "idle" | "queued" | "processing" | "completed" | "failed" | "cancelled";
 
-export type AiReviewStatus = "pending" | "accepted" | "rejected" | "edited";
+export type AiReviewStatus = "pending" | "accepted" | "rejected" | "edited" | "partially_accepted";
+
+export type AiSuggestionPart = {
+  index: number;
+  text: string;
+  accepted: boolean;
+};
 
 export type AiSuggestion = {
   id: string;
@@ -123,6 +129,7 @@ export type AiSuggestion = {
   instruction: string | null;
   resultText: string | null;
   serverResultText?: string | null;
+  suggestionParts?: AiSuggestionPart[];
   createdAt: string;
   updatedAt: string;
   mismatchDetected?: boolean;

@@ -47,6 +47,32 @@ const aiActions: Array<{ value: AiActionType; label: string }> = [
   { value: "translate", label: "Translate" }
 ];
 
+function buildSuggestionParts(text: string | null | undefined) {
+  const normalized = text?.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const rawParts =
+    lines.length > 1
+      ? lines
+      : normalized
+          .split(/(?<=[.!?])\s+/)
+          .map((part) => part.trim())
+          .filter(Boolean);
+
+  return (rawParts.length ? rawParts : [normalized]).map((part, index) => ({
+    index,
+    text: part,
+    accepted: true
+  }));
+}
+
 export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps) {
   const queryClient = useQueryClient();
   const { session } = useSession();
@@ -412,13 +438,21 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     }
 
     editor.chain().focus().insertContentAt({ from: selection.from, to: selection.to }, aiDraft.resultText).run();
-    const reviewStatus = aiDraft.serverResultText && aiDraft.serverResultText !== aiDraft.resultText ? "edited" : "accepted";
+    const acceptedParts = aiDraft.suggestionParts?.filter((part) => part.accepted).map((part) => part.index) ?? [];
+    const hasPartialSelection =
+      Boolean(aiDraft.suggestionParts?.length) && acceptedParts.length > 0 && acceptedParts.length < (aiDraft.suggestionParts?.length ?? 0);
+    const reviewStatus = hasPartialSelection
+      ? "partially_accepted"
+      : aiDraft.serverResultText && aiDraft.serverResultText !== aiDraft.resultText
+        ? "edited"
+        : "accepted";
     if (aiDraft.interactionId) {
       void aiClient.reviewSuggestion({
         interactionId: aiDraft.interactionId,
         userId: aiUserId,
         reviewStatus,
-        editedText: reviewStatus === "edited" ? aiDraft.resultText : null
+        editedText: reviewStatus === "edited" ? aiDraft.resultText : null,
+        acceptedParts: reviewStatus === "partially_accepted" ? acceptedParts : undefined
       }).then(() => queryClient.invalidateQueries({ queryKey: ["documents", documentId, "ai-history"] }));
     }
     setAiDraft(null);
@@ -452,6 +486,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
       instruction: instruction.trim() || null,
       resultText: "",
       serverResultText: "",
+      suggestionParts: [],
       createdAt: now,
       updatedAt: now,
       errorMessage: null
@@ -502,6 +537,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                   status: "completed",
                   resultText: text,
                   serverResultText: text,
+                  suggestionParts: buildSuggestionParts(text),
                   updatedAt: new Date().toISOString(),
                   mismatchDetected: latestSelectionRef.current !== current.sourceText
                 }
@@ -518,6 +554,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                   status: "failed",
                   resultText: text,
                   serverResultText: text,
+                  suggestionParts: buildSuggestionParts(text),
                   errorMessage: message ?? "AI request failed.",
                   updatedAt: new Date().toISOString(),
                   mismatchDetected: latestSelectionRef.current !== current.sourceText
@@ -535,6 +572,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                   status: "cancelled",
                   resultText: text,
                   serverResultText: text,
+                  suggestionParts: buildSuggestionParts(text),
                   errorMessage: message ?? "Generation cancelled.",
                   updatedAt: new Date().toISOString(),
                   mismatchDetected: latestSelectionRef.current !== current.sourceText
@@ -583,6 +621,31 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
       void queryClient.invalidateQueries({ queryKey: ["documents", documentId, "ai-history"] });
     }
     setAiDraft(null);
+  }
+
+  async function toggleAiDraftPart(index: number) {
+    if (!aiDraft?.serverResultText) {
+      return;
+    }
+
+    const nextParts =
+      aiDraft.suggestionParts?.map((part) => (part.index === index ? { ...part, accepted: !part.accepted } : part)) ?? [];
+    const acceptedParts = nextParts.filter((part) => part.accepted).map((part) => part.index);
+    const preview = await aiClient.previewPartialAcceptance({
+      suggestion: aiDraft.serverResultText,
+      acceptedParts
+    });
+
+    setAiDraft((current) =>
+      current
+        ? {
+            ...current,
+            reviewStatus: acceptedParts.length && acceptedParts.length < nextParts.length ? "partially_accepted" : current.reviewStatus,
+            suggestionParts: nextParts,
+            resultText: preview.resultText || ""
+          }
+        : current
+    );
   }
 
   async function cancelAiRequest() {
@@ -722,6 +785,41 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                   <div className="rounded-2xl border border-[#eee7de] bg-[#fcfbf8] px-4 py-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Original</p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{aiDraft.sourceText}</p>
+                  </div>
+                  {aiDraft.suggestionParts?.length ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggestion parts</p>
+                      <div className="space-y-2">
+                        {aiDraft.suggestionParts.map((part) => (
+                          <button
+                            key={part.index}
+                            type="button"
+                            aria-label={`${part.accepted ? "Accepted" : "Rejected"} part ${part.index + 1}`}
+                            className={cn(
+                              "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                              part.accepted
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                                : "border-[#eee7de] bg-[#fcfbf8] text-muted-foreground"
+                            )}
+                            onClick={() => void toggleAiDraftPart(part.index)}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <strong className="text-xs uppercase tracking-[0.14em]">
+                                {part.accepted ? "Accepted" : "Rejected"}
+                              </strong>
+                              <span className="text-xs">Part {part.index + 1}</span>
+                            </div>
+                            <p className="mt-2 leading-6">{part.text}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="rounded-2xl border border-[#eee7de] bg-[#fcfbf8] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Accepted result</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                      {aiDraft.resultText || "Reject all parts to clear the result, or edit the text manually below."}
+                    </p>
                   </div>
                   <Textarea
                     value={aiDraft.resultText ?? ""}
