@@ -16,8 +16,12 @@ def test_character_crdt_preserves_concurrent_inserts() -> None:
     left_first = CollaborativeDocument(title="Doc", content="AB")
     right_first = CollaborativeDocument(title="Doc", content="AB")
 
-    insert_one = left_first.build_operations_for_document(title="Doc", content="A1B", actor_id="alice")
-    insert_two = right_first.build_operations_for_document(title="Doc", content="A2B", actor_id="bob")
+    insert_one = left_first.build_operations_for_document(
+        title="Doc", content="A1B", actor_id="alice"
+    )
+    insert_two = right_first.build_operations_for_document(
+        title="Doc", content="A2B", actor_id="bob"
+    )
 
     merged_a = CollaborativeDocument(title="Doc", content="AB")
     merged_a.apply_operations(insert_one)
@@ -35,8 +39,12 @@ def test_character_crdt_preserves_insert_during_concurrent_delete() -> None:
     deleting_replica = CollaborativeDocument(title="Doc", content="AB")
     inserting_replica = CollaborativeDocument(title="Doc", content="AB")
 
-    delete_b = deleting_replica.build_operations_for_document(title="Doc", content="A", actor_id="alice")
-    insert_x = inserting_replica.build_operations_for_document(title="Doc", content="AXB", actor_id="bob")
+    delete_b = deleting_replica.build_operations_for_document(
+        title="Doc", content="A", actor_id="alice"
+    )
+    insert_x = inserting_replica.build_operations_for_document(
+        title="Doc", content="AXB", actor_id="bob"
+    )
 
     merged_a = CollaborativeDocument(title="Doc", content="AB")
     merged_a.apply_operations(delete_b)
@@ -147,7 +155,10 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
                 )
                 sync_3 = ws3.receive_json()
                 assert sync_3["type"] == "sync"
-                assert sync_3["document"]["content"] == update_for_ws1["document"]["content"]
+                assert (
+                    sync_3["document"]["content"]
+                    == update_for_ws1["document"]["content"]
+                )
                 ws1_presence_join = ws1.receive_json()
                 assert ws1_presence_join["type"] == "presence"
                 assert ws1_presence_join["action"] == "join"
@@ -217,7 +228,11 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
             assert awareness["user"]["activity"] == "selecting"
             assert awareness["user"]["activityLabel"] == "Selecting 5 characters"
             assert awareness["user"]["cursorPos"] == 5
-            assert awareness["user"]["selection"] == {"from": 1, "to": 5, "text": "Hell"}
+            assert awareness["user"]["selection"] == {
+                "from": 1,
+                "to": 5,
+                "text": "Hell",
+            }
             replica = CollaborativeDocument(title="Doc", content="Hello")
             operations = replica.build_operations_for_document(
                 title="Doc",
@@ -237,4 +252,8 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
             assert operation_update["type"] == "operations"
             assert operation_update["user"]["activity"] == "selecting"
             assert operation_update["user"]["cursorPos"] == 5
-            assert operation_update["user"]["selection"] == {"from": 1, "to": 5, "text": "Hell"}
+            assert operation_update["user"]["selection"] == {
+                "from": 1,
+                "to": 5,
+                "text": "Hell",
+            }

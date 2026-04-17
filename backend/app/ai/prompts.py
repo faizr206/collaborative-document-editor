@@ -22,9 +22,14 @@ class PromptTemplate:
         instruction: str,
         options: dict[str, Any],
     ) -> str:
-        normalized_options = ", ".join(
-            f"{key}={value}" for key, value in sorted(options.items()) if value not in (None, "")
-        ) or "None"
+        normalized_options = (
+            ", ".join(
+                f"{key}={value}"
+                for key, value in sorted(options.items())
+                if value not in (None, "")
+            )
+            or "None"
+        )
         return self.template.format(
             source_text=source_text,
             context_excerpt=context_excerpt or "None",
@@ -120,4 +125,3 @@ def get_prompt_template(action_type: str) -> PromptTemplate:
     if not template:
         raise ValueError(f"Unsupported action type: {action_type}")
     return template
-

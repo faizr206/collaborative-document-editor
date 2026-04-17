@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { sharingClient } from "../../services/sharingClient";
-import { documentsClient } from "../../services/documentsClient";
 import { navigate } from "../../app/navigation";
+import { documentsClient } from "../../services/documentsClient";
+import { sharingClient } from "../../services/sharingClient";
 
 type DocumentSettingsPageProps = {
   documentId: number;
@@ -10,8 +10,9 @@ type DocumentSettingsPageProps = {
 
 export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) {
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const documentQuery = useQuery({
     queryKey: ["documents", documentId],
@@ -23,27 +24,33 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
     queryFn: () => sharingClient.listMembers(documentId)
   });
 
-  const linksQuery = useQuery({
-    queryKey: ["documents", documentId, "shareLinks"],
-    queryFn: () => sharingClient.listShareLinks(documentId)
-  });
-
   const inviteMutation = useMutation({
-    mutationFn: () => sharingClient.inviteMember(documentId, { email: email.trim(), role }),
+    mutationFn: () => sharingClient.inviteMember(documentId, { identifier: identifier.trim(), role }),
     onSuccess: async () => {
-      setEmail("");
+      setIdentifier("");
+      setActionError(null);
       await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "members"] });
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      await queryClient.invalidateQueries({ queryKey: ["documents", documentId] });
+    },
+    onError: (error) => {
+      setActionError(error instanceof Error ? error.message : "Unable to share this document.");
     }
   });
 
-  const createLinkMutation = useMutation({
-    mutationFn: () => sharingClient.createShareLink(documentId, role),
+  const deleteMutation = useMutation({
+    mutationFn: () => documentsClient.remove(documentId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "shareLinks"] });
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      navigate("/documents");
+    },
+    onError: (error) => {
+      setActionError(error instanceof Error ? error.message : "Unable to delete this document.");
     }
   });
 
   const canManage = documentQuery.data?.role === "owner";
+  const isBusy = inviteMutation.isPending || deleteMutation.isPending;
 
   return (
     <section className="page-stack">
@@ -51,7 +58,7 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
         <div>
           <span className="eyebrow">Settings</span>
           <h1>Sharing & access</h1>
-          <p>Frontend-only member and share-link management with owner-gated controls.</p>
+          <p>Owners can share by email or username, assign roles, and remove access server-side.</p>
         </div>
         <button className="secondary-action" type="button" onClick={() => navigate(`/documents/${documentId}`)}>
           Back to document
@@ -63,41 +70,51 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
           <div className="sidebar-card-header">
             <div>
               <h2>Invite collaborator</h2>
-              <p>UI is wired behind a dedicated sharing client so backend endpoints can replace local storage later.</p>
+              <p>Use an account email or username and assign `editor` or `viewer` access.</p>
             </div>
-            <span className={`role-badge role-${documentQuery.data?.role ?? "owner"}`}>{documentQuery.data?.role ?? "owner"}</span>
+            <span className={`role-badge role-${documentQuery.data?.role ?? "viewer"}`}>
+              {documentQuery.data?.role ?? "viewer"}
+            </span>
           </div>
 
           <label className="field">
-            <span>Email</span>
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="teammate@example.com" disabled={!canManage} />
+            <span>Email or username</span>
+            <input
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              placeholder="teammate@example.com or teammate"
+              disabled={!canManage || isBusy}
+            />
           </label>
 
           <label className="field">
             <span>Role</span>
-            <select value={role} onChange={(event) => setRole(event.target.value as typeof role)} disabled={!canManage}>
+            <select value={role} onChange={(event) => setRole(event.target.value as typeof role)} disabled={!canManage || isBusy}>
               <option value="editor">Editor</option>
               <option value="viewer">Viewer</option>
             </select>
           </label>
 
           <div className="inline-actions">
-            <button className="primary-action" type="button" disabled={!canManage || !email.trim()} onClick={() => inviteMutation.mutate()}>
-              {inviteMutation.isPending ? "Sending..." : "Invite member"}
-            </button>
-            <button className="secondary-action" type="button" disabled={!canManage} onClick={() => createLinkMutation.mutate()}>
-              {createLinkMutation.isPending ? "Creating..." : "Create share link"}
+            <button
+              className="primary-action"
+              type="button"
+              disabled={!canManage || !identifier.trim() || isBusy}
+              onClick={() => inviteMutation.mutate()}
+            >
+              {inviteMutation.isPending ? "Sharing..." : "Share document"}
             </button>
           </div>
 
-          {!canManage ? <div className="editor-banner editor-banner-warning">Only owners can manage sharing settings.</div> : null}
+          {!canManage ? <div className="editor-banner editor-banner-warning">Only owners can change sharing or delete this document.</div> : null}
+          {actionError ? <div className="editor-banner editor-banner-warning">{actionError}</div> : null}
         </section>
 
         <section className="surface page-stack">
           <div className="sidebar-card-header">
             <div>
               <h2>Members</h2>
-              <p>Role updates and removals stay inside the sharing client boundary.</p>
+              <p>Permissions are enforced in the backend. Editors can modify content and use AI. Viewers are read-only.</p>
             </div>
           </div>
 
@@ -110,77 +127,77 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
                     <p>{member.email}</p>
                   </div>
                   <div className="inline-actions">
-                    <select
-                      value={member.role}
-                      disabled={!canManage}
-                      onChange={async (event) => {
-                        await sharingClient.updateMemberRole(
-                          documentId,
-                          member.userId,
-                          event.target.value as "editor" | "viewer"
-                        );
-                        await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "members"] });
-                      }}
-                    >
-                      <option value="editor">Editor</option>
-                      <option value="viewer">Viewer</option>
-                    </select>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      disabled={!canManage}
-                      onClick={async () => {
-                        await sharingClient.removeMember(documentId, member.userId);
-                        await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "members"] });
-                      }}
-                    >
-                      Remove
-                    </button>
+                    {member.role === "owner" ? (
+                      <span className="role-badge role-owner">owner</span>
+                    ) : (
+                      <>
+                        <select
+                          value={member.role}
+                          disabled={!canManage || isBusy}
+                          onChange={async (event) => {
+                            try {
+                              setActionError(null);
+                              await sharingClient.updateMemberRole(
+                                documentId,
+                                member.userId,
+                                event.target.value as "editor" | "viewer"
+                              );
+                              await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "members"] });
+                              await queryClient.invalidateQueries({ queryKey: ["documents"] });
+                              await queryClient.invalidateQueries({ queryKey: ["documents", documentId] });
+                            } catch (error) {
+                              setActionError(error instanceof Error ? error.message : "Unable to update role.");
+                            }
+                          }}
+                        >
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          disabled={!canManage || isBusy}
+                          onClick={async () => {
+                            try {
+                              setActionError(null);
+                              await sharingClient.removeMember(documentId, member.userId);
+                              await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "members"] });
+                              await queryClient.invalidateQueries({ queryKey: ["documents"] });
+                              await queryClient.invalidateQueries({ queryKey: ["documents", documentId] });
+                            } catch (error) {
+                              setActionError(error instanceof Error ? error.message : "Unable to remove member.");
+                            }
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="empty-state">No invited members yet.</div>
+            <div className="empty-state">No shared members yet.</div>
           )}
         </section>
 
         <section className="surface page-stack">
           <div className="sidebar-card-header">
             <div>
-              <h2>Share links</h2>
-              <p>Create links now; swap in real backend issuance later.</p>
+              <h2>Danger zone</h2>
+              <p>Deleting a document is owner-only and enforced by the backend.</p>
             </div>
           </div>
 
-          {linksQuery.data?.length ? (
-            <div className="table-list">
-              {linksQuery.data.map((link) => (
-                <div key={link.id} className="table-row">
-                  <div>
-                    <strong>{link.role} link</strong>
-                    <p>{link.url}</p>
-                  </div>
-                  <div className="inline-actions">
-                    <span className={`role-badge role-${link.role}`}>{link.isActive ? "active" : "disabled"}</span>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      disabled={!canManage || !link.isActive}
-                      onClick={async () => {
-                        await sharingClient.disableShareLink(documentId, link.id);
-                        await queryClient.invalidateQueries({ queryKey: ["documents", documentId, "shareLinks"] });
-                      }}
-                    >
-                      Disable
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">No share links yet.</div>
-          )}
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={!canManage || isBusy}
+            onClick={() => deleteMutation.mutate()}
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete document"}
+          </button>
         </section>
       </div>
     </section>

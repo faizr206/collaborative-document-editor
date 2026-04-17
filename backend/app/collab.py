@@ -140,8 +140,12 @@ class SequenceCRDT:
         for character in text:
             self._counter += 1
             node_id = f"{actor_id}:{self._counter}"
-            position = allocate_position(previous_position, None, actor_id, self._counter)
-            self._nodes[node_id] = SequenceNode(id=node_id, value=character, position=position)
+            position = allocate_position(
+                previous_position, None, actor_id, self._counter
+            )
+            self._nodes[node_id] = SequenceNode(
+                id=node_id, value=character, position=position
+            )
             previous_position = position
 
     def apply_operations(self, operations: list[Operation]) -> None:
@@ -159,7 +163,9 @@ class SequenceCRDT:
 
             self._nodes.pop(operation["id"], None)
 
-    def build_operations_for_text(self, next_text: str, actor_id: str) -> list[Operation]:
+    def build_operations_for_text(
+        self, next_text: str, actor_id: str
+    ) -> list[Operation]:
         current_nodes = self._sorted_nodes()
         current_text = "".join(node.value for node in current_nodes)
 
@@ -168,7 +174,10 @@ class SequenceCRDT:
 
         prefix_length = 0
         max_prefix = min(len(current_text), len(next_text))
-        while prefix_length < max_prefix and current_text[prefix_length] == next_text[prefix_length]:
+        while (
+            prefix_length < max_prefix
+            and current_text[prefix_length] == next_text[prefix_length]
+        ):
             prefix_length += 1
 
         current_suffix = len(current_text)
@@ -185,13 +194,21 @@ class SequenceCRDT:
         for node in current_nodes[prefix_length:current_suffix]:
             operations.append({"type": "delete", "id": node.id})
 
-        left_position = current_nodes[prefix_length - 1].position if prefix_length > 0 else None
-        right_position = current_nodes[current_suffix].position if current_suffix < len(current_nodes) else None
+        left_position = (
+            current_nodes[prefix_length - 1].position if prefix_length > 0 else None
+        )
+        right_position = (
+            current_nodes[current_suffix].position
+            if current_suffix < len(current_nodes)
+            else None
+        )
 
         for character in next_text[prefix_length:next_suffix]:
             self._counter += 1
             node_id = f"{actor_id}:{self._counter}"
-            position = allocate_position(left_position, right_position, actor_id, self._counter)
+            position = allocate_position(
+                left_position, right_position, actor_id, self._counter
+            )
             operations.append(
                 {
                     "type": "insert",
