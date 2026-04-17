@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
+from app.ai.provider import MockLLMProvider
 from app.db import create_db_and_tables, engine
 from app.main import app
 from app.models import AIInteraction, Document, DocumentPermission

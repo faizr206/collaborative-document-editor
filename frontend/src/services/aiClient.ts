@@ -1,6 +1,6 @@
 import { getAccessToken } from "../api/auth";
 import { API_BASE_URL } from "../config";
-import type { AiActionType, AiReviewStatus, AiSuggestion } from "../lib/types";
+import type { AiActionType, AiReviewStatus, AiSuggestion, AiSuggestionPart } from "../lib/types";
 
 type ApiErrorEnvelope = {
   detail?: string;
@@ -41,6 +41,7 @@ type BackendAiInteraction = {
   resultText: string;
   status: string;
   reviewStatus: AiReviewStatus;
+  suggestionParts?: string[];
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +62,14 @@ type StreamInput = {
   instruction: string | null;
   documentId: number;
   documentContent: string;
+};
+
+type PartialAcceptanceResponse = {
+  data: {
+    parts: string[];
+    acceptedParts: number[];
+    resultText: string;
+  };
 };
 
 type StreamCallbacks = {
@@ -128,6 +137,12 @@ function mapStatus(value: string): AiSuggestion["status"] {
 }
 
 function mapInteraction(item: BackendAiInteraction): AiSuggestion {
+  const suggestionParts: AiSuggestionPart[] | undefined = item.suggestionParts?.map((part, index) => ({
+    index,
+    text: part,
+    accepted: true
+  }));
+
   return {
     id: String(item.id),
     interactionId: item.id,
@@ -140,6 +155,7 @@ function mapInteraction(item: BackendAiInteraction): AiSuggestion {
     instruction: item.instruction || null,
     resultText: item.resultText || null,
     serverResultText: item.resultText || null,
+    suggestionParts,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     errorMessage: item.errorMessage,
@@ -289,8 +305,10 @@ export const aiClient = {
 
   async reviewSuggestion(input: {
     interactionId: number;
-    reviewStatus: Extract<AiReviewStatus, "accepted" | "rejected" | "edited">;
+    userId: number;
+    reviewStatus: Extract<AiReviewStatus, "accepted" | "rejected" | "edited" | "partially_accepted">;
     editedText?: string | null;
+    acceptedParts?: number[];
   }): Promise<AiSuggestion> {
     const payload = await requestJson<{ data: BackendAiInteraction }>(
       `/api/ai/interactions/${input.interactionId}/review`,
@@ -298,11 +316,24 @@ export const aiClient = {
         method: "POST",
         body: JSON.stringify({
           review_status: input.reviewStatus,
-          edited_text: input.editedText ?? null
+          edited_text: input.editedText ?? null,
+          accepted_parts: input.acceptedParts ?? null
         })
       }
     );
 
     return mapInteraction(payload.data);
+  },
+
+  async previewPartialAcceptance(input: { suggestion: string; acceptedParts: number[] }) {
+    const payload = await requestJson<PartialAcceptanceResponse>("/api/ai/partial-accept", {
+      method: "POST",
+      body: JSON.stringify({
+        suggestion: input.suggestion,
+        accepted_parts: input.acceptedParts
+      })
+    });
+
+    return payload.data;
   }
 };

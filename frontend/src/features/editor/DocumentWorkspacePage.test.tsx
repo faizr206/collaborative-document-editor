@@ -28,7 +28,8 @@ const {
   mockAiClient: {
     streamSuggestion: vi.fn(),
     listHistory: vi.fn(),
-    reviewSuggestion: vi.fn()
+    reviewSuggestion: vi.fn(),
+    previewPartialAcceptance: vi.fn()
   },
   mockExportsClient: {
     start: vi.fn()
@@ -186,6 +187,13 @@ describe("DocumentWorkspacePage", () => {
     mockVersionsClient.create.mockResolvedValue(undefined);
     mockAiClient.listHistory.mockResolvedValue([]);
     mockAiClient.reviewSuggestion.mockResolvedValue(undefined);
+    mockAiClient.previewPartialAcceptance.mockImplementation(
+      ({ acceptedParts }: { acceptedParts: number[] }) => Promise.resolve({
+        parts: ["Sharper text."],
+        acceptedParts,
+        resultText: acceptedParts.length ? "Sharper text." : ""
+      })
+    );
     mockAiClient.streamSuggestion.mockImplementation(
       (
         _input: unknown,
@@ -269,6 +277,64 @@ describe("DocumentWorkspacePage", () => {
 
     await waitFor(() => {
       expect(insertContentAt).toHaveBeenCalledWith({ from: 1, to: 5 }, "Sharper text");
+    });
+  });
+
+  it("supports partial acceptance of AI suggestion parts", async () => {
+    const user = userEvent.setup();
+
+    mockAiClient.previewPartialAcceptance.mockResolvedValue({
+      parts: ["Sharper text.", "Add evidence."],
+      acceptedParts: [1],
+      resultText: "Add evidence."
+    });
+    mockAiClient.streamSuggestion.mockImplementation(
+      (
+        _input: unknown,
+        callbacks: {
+          onStart?: (payload: { requestId: string; interactionId: number; status: string }) => void;
+          onChunk?: (payload: { requestId: string; interactionId: number; delta: string; text: string }) => void;
+          onComplete?: (payload: { requestId: string; interactionId: number; status: string; text: string }) => void;
+        }
+      ) => {
+        callbacks.onStart?.({ requestId: "req_2", interactionId: 12, status: "pending" });
+        callbacks.onComplete?.({
+          requestId: "req_2",
+          interactionId: 12,
+          status: "completed",
+          text: "Sharper text. Add evidence."
+        });
+
+        return {
+          cancel: vi.fn().mockResolvedValue(undefined),
+          done: Promise.resolve()
+        };
+      }
+    );
+
+    renderWithProviders(<DocumentWorkspacePage documentId={42} />);
+
+    await screen.findByDisplayValue("Strategy Memo");
+    await user.click(screen.getByRole("button", { name: "Select example" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await screen.findByText("Part 1");
+    await user.click(screen.getByRole("button", { name: /accepted part 1/i }));
+
+    await waitFor(() => {
+      expect(mockAiClient.previewPartialAcceptance).toHaveBeenCalled();
+    });
+
+    await user.click(screen.getByRole("button", { name: /Apply suggestion/i }));
+
+    await waitFor(() => {
+      expect(insertContentAt).toHaveBeenCalledWith({ from: 1, to: 5 }, "Add evidence.");
+      expect(mockAiClient.reviewSuggestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewStatus: "partially_accepted",
+          acceptedParts: [1]
+        })
+      );
     });
   });
 
