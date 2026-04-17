@@ -124,7 +124,9 @@ export function TiptapEditor({
     editable,
     editorProps: {
       attributes: {
-        class: "editor-prose"
+        class: "editor-prose",
+        "aria-label": "Document editor",
+        "data-testid": "document-editor"
       }
     },
     onUpdate: ({ editor: nextEditor }) => {

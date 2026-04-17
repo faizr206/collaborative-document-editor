@@ -180,6 +180,52 @@ Run frontend tests in watch mode:
 cd frontend
 npm run test:watch
 ```
+
+### End-to-End Tests
+
+The frontend also includes Playwright end-to-end tests in `frontend/e2e/`.
+
+Install dependencies first:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cd ../frontend
+npm install
+```
+
+Install the Playwright browser once if needed:
+
+```bash
+cd frontend
+npx playwright install chromium
+```
+
+Run the full e2e suite:
+
+```bash
+cd frontend
+npm run test:e2e
+```
+
+What this does automatically:
+
+- starts the FastAPI backend on `http://127.0.0.1:8010`
+- starts the Vite frontend on `http://127.0.0.1:4173`
+- uses the mock AI provider for deterministic AI flows
+- creates an isolated temporary SQLite database for the test run
+- deletes that temporary e2e database after the run finishes
+
+Current e2e coverage includes:
+
+- register and logout
+- profile preference save flow
+- document sharing and viewer read-only access
+- login through AI suggestion acceptance
+
 ## Real-Time Collaboration 
 
 ### Implementation

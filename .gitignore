@@ -12,6 +12,9 @@ dist/
 frontend/dist/
 .vite/
 frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
+frontend/.playwright/
 
 # SQLite PoC database files
 *.sqlite

@@ -817,6 +817,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                     value={aiDraft.resultText ?? ""}
                     onChange={(event) => setAiDraft((current) => (current ? { ...current, resultText: event.target.value } : current))}
                     className="min-h-[180px] resize-none border-[#e5dfd8] bg-[#fcfbf8]"
+                    data-testid="ai-result-textarea"
                   />
                   <div className="flex gap-2">
                     <Button variant="secondary" className="flex-1 rounded-2xl border-[#ddd7cf] bg-white" type="button" onClick={() => void rejectAiDraft()}>
@@ -854,6 +855,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                   placeholder="Ask AI for help..."
                   className="min-h-[108px] resize-none border-[#e5dfd8] bg-[#fcfbf8]"
                   disabled={!canEdit || aiAccessDenied}
+                  data-testid="ai-instruction-textarea"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
