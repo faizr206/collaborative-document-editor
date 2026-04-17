@@ -11,8 +11,10 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.ai.service import AIService
+from app.access import require_document_role
+from app.auth import CurrentUser
 from app.db import get_session
-from app.models import AIInteraction, Document, DocumentPermission
+from app.models import AIInteraction
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -25,7 +27,7 @@ class AIRequest(BaseModel):
     context: str = ""
     instruction: str = ""
     document_id: int
-    user_id: int
+    user_id: Optional[int] = None
     document_content: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
 
@@ -45,45 +47,17 @@ def serialize_timestamp(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat().replace("+00:00", "Z")
 
 
-def user_can_use_ai(session: Session, document_id: int, user_id: int) -> bool:
-    document = session.exec(select(Document).where(Document.id == document_id)).first()
-
-    if not document:
-        return False
-
-    if document.owner_id == user_id:
-        return True
-
-    permission = session.exec(
-        select(DocumentPermission).where(
-            DocumentPermission.document_id == document_id,
-            DocumentPermission.user_id == user_id,
-        )
-    ).first()
-
-    if not permission:
-        return False
-
-    return permission.permission in {"write", "editor", "owner"}
-
-
-def get_document_or_404(session: Session, document_id: int) -> Document:
-    document = session.exec(select(Document).where(Document.id == document_id)).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return document
-
-
 def create_interaction_record(
     *,
     session: Session,
     payload: AIRequest,
+    current_user: CurrentUser,
     prepared,
 ) -> AIInteraction:
     interaction = AIInteraction(
         request_id=prepared.request_id,
         document_id=payload.document_id,
-        user_id=payload.user_id,
+        user_id=current_user.id,
         action_type=payload.action_type,
         source_text=prepared.source_text,
         context=payload.context,
@@ -165,17 +139,15 @@ def get_ai_capabilities():
 @router.post("/suggest")
 async def create_ai_suggestion(
     payload: AIRequest,
+    current_user: CurrentUser,
     session: Session = Depends(get_session),
 ):
     if not payload.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
 
-    document = get_document_or_404(session, payload.document_id)
-    if not user_can_use_ai(session, payload.document_id, payload.user_id):
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to use AI for this document",
-        )
+    document, _ = require_document_role(
+        session, payload.document_id, current_user.id, "editor"
+    )
 
     prepared = ai_service.prepare_prompt(
         action_type=payload.action_type,
@@ -185,12 +157,19 @@ async def create_ai_suggestion(
         instruction=payload.instruction,
         options=payload.options,
     )
-    interaction = create_interaction_record(session=session, payload=payload, prepared=prepared)
+    interaction = create_interaction_record(
+        session=session,
+        payload=payload,
+        current_user=current_user,
+        prepared=prepared,
+    )
 
     try:
         result = await ai_service.generate_suggestion(prepared)
     except ValueError as exc:
-        update_interaction(interaction, status="error", result_text="", error_message=str(exc))
+        update_interaction(
+            interaction, status="error", result_text="", error_message=str(exc)
+        )
         session.add(interaction)
         session.commit()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -207,17 +186,15 @@ async def create_ai_suggestion(
 async def stream_ai_suggestion(
     payload: AIRequest,
     request: Request,
+    current_user: CurrentUser,
     session: Session = Depends(get_session),
 ):
     if not payload.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
 
-    document = get_document_or_404(session, payload.document_id)
-    if not user_can_use_ai(session, payload.document_id, payload.user_id):
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to use AI for this document",
-        )
+    document, _ = require_document_role(
+        session, payload.document_id, current_user.id, "editor"
+    )
 
     prepared = ai_service.prepare_prompt(
         action_type=payload.action_type,
@@ -227,7 +204,12 @@ async def stream_ai_suggestion(
         instruction=payload.instruction,
         options=payload.options,
     )
-    interaction = create_interaction_record(session=session, payload=payload, prepared=prepared)
+    interaction = create_interaction_record(
+        session=session,
+        payload=payload,
+        current_user=current_user,
+        prepared=prepared,
+    )
 
     async def event_generator():
         yield format_sse_event(
@@ -258,7 +240,9 @@ async def stream_ai_suggestion(
                     },
                 )
 
-            update_interaction(interaction, status="completed", result_text=collected_text)
+            update_interaction(
+                interaction, status="completed", result_text=collected_text
+            )
             session.add(interaction)
             session.commit()
             session.refresh(interaction)
@@ -322,20 +306,20 @@ async def stream_ai_suggestion(
 def cancel_ai_generation(request_id: str):
     cancelled = ai_service.cancel(request_id)
     if not cancelled:
-        raise HTTPException(status_code=404, detail="Generation request not found or already finished")
+        raise HTTPException(
+            status_code=404, detail="Generation request not found or already finished"
+        )
     return {"data": {"requestId": request_id, "cancelled": True}}
 
 
 @router.get("/history/{document_id}")
 def list_ai_history(
     document_id: int,
-    user_id: int,
+    current_user: CurrentUser,
     limit: int = 20,
     session: Session = Depends(get_session),
 ):
-    get_document_or_404(session, document_id)
-    if not user_can_use_ai(session, document_id, user_id):
-        raise HTTPException(status_code=403, detail="You do not have permission to view AI history")
+    require_document_role(session, document_id, current_user.id, "editor")
 
     interactions = session.exec(
         select(AIInteraction)
@@ -351,7 +335,7 @@ def list_ai_history(
 def review_ai_interaction(
     interaction_id: int,
     payload: AIReviewRequest,
-    user_id: int,
+    current_user: CurrentUser,
     session: Session = Depends(get_session),
 ):
     allowed_review_statuses = {"accepted", "rejected", "edited"}
@@ -362,8 +346,7 @@ def review_ai_interaction(
     if not interaction:
         raise HTTPException(status_code=404, detail="AI interaction not found")
 
-    if not user_can_use_ai(session, interaction.document_id, user_id):
-        raise HTTPException(status_code=403, detail="You do not have permission to review this interaction")
+    require_document_role(session, interaction.document_id, current_user.id, "editor")
 
     interaction.review_status = payload.review_status
     if payload.review_status == "edited" and payload.edited_text is not None:

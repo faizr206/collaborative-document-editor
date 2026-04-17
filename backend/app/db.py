@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from app.config import DATABASE_URL
-from app.models import Document, DocumentPermission, DocumentVersion, User
+from app.models import User
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -31,7 +31,9 @@ def _ensure_user_is_admin_column():
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
     if "is_admin" not in existing_columns:
         with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            )
 
 
 def _ensure_ai_interaction_columns():
@@ -39,7 +41,9 @@ def _ensure_ai_interaction_columns():
     if "ai_interactions" not in inspector.get_table_names():
         return
 
-    existing_columns = {column["name"] for column in inspector.get_columns("ai_interactions")}
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("ai_interactions")
+    }
     desired_columns = {
         "request_id": "ALTER TABLE ai_interactions ADD COLUMN request_id VARCHAR DEFAULT ''",
         "context_excerpt": "ALTER TABLE ai_interactions ADD COLUMN context_excerpt VARCHAR DEFAULT ''",
@@ -68,7 +72,9 @@ def _hash_password(password: str) -> str:
 
 def create_default_user():
     with Session(engine) as session:
-        existing_admin = session.exec(select(User).where(User.username == "admin")).first()
+        existing_admin = session.exec(
+            select(User).where(User.username == "admin")
+        ).first()
         if not existing_admin:
             admin_user = User(
                 username="admin",

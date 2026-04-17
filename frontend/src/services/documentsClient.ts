@@ -1,5 +1,6 @@
 import {
   createDocument,
+  deleteDocument,
   getDocument,
   listDocuments,
   updateDocument,
@@ -23,12 +24,12 @@ function mapDocument(document: DocumentDto): DocumentDetails {
     content: document.content,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
-    role: "owner",
+    role: document.role,
     owner: {
-      id: "usr_local",
-      displayName: "You"
+      id: String(document.owner.id),
+      displayName: document.owner.username
     },
-    isAiEnabled: true
+    isAiEnabled: document.role !== "viewer"
   };
 }
 
@@ -49,11 +50,13 @@ export const documentsClient = {
   async list(): Promise<DocumentListItem[]> {
     const items = await listDocuments();
     return items.map((item) => ({
-      ...item,
-      role: "owner",
+      id: item.id,
+      title: item.title,
+      updatedAt: item.updatedAt,
+      role: item.role,
       owner: {
-        id: "usr_local",
-        displayName: "You"
+        id: String(item.owner.id),
+        displayName: item.owner.username
       }
     }));
   },
@@ -68,6 +71,9 @@ export const documentsClient = {
   async save(documentId: number, input: { title: string; content: string }) {
     const document = await updateDocument(documentId, input);
     return mapDocument(document);
+  },
+  async remove(documentId: number) {
+    await deleteDocument(documentId);
   },
   async bootstrap(documentId: number, session: SessionState | null): Promise<DocumentBootstrap> {
     const document = await this.get(documentId);

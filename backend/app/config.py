@@ -53,7 +53,9 @@ def resolve_database_url(raw_url: str) -> str:
     return f"sqlite:///{resolved_path.resolve()}"
 
 
-DATABASE_URL = resolve_database_url(get_str("DATABASE_URL", "sqlite:///backend/sqlite.db"))
+DATABASE_URL = resolve_database_url(
+    get_str("DATABASE_URL", "sqlite:///backend/sqlite.db")
+)
 JWT_SECRET_KEY = get_str("JWT_SECRET_KEY", "change-me-in-env")
 JWT_ALGORITHM = get_str("JWT_ALGORITHM", "HS256")
 TOKEN_EXPIRY_SECONDS = get_int("TOKEN_EXPIRY_SECONDS", 30 * 60)

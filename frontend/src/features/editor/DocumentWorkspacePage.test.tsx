@@ -260,8 +260,7 @@ describe("DocumentWorkspacePage", () => {
         type: "rewrite",
         sourceText: "Selected text",
         instruction: "Make it sharper",
-        documentId: 42,
-        userId: 1
+        documentId: 42
       }),
       expect.any(Object)
     );

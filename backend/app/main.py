@@ -1,6 +1,7 @@
 """
 main.py — Application entry point.
 """
+
 from app.routes.ai import router as ai_router
 from contextlib import asynccontextmanager
 
@@ -17,17 +18,19 @@ from app.routes.permissions import router as permissions_router
 from app.routes.admin import router as admin_router
 from app.websocket import router as websocket_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     create_default_user()
     yield
 
+
 app = FastAPI(
     title="Collaborative Document Editor",
     description="Real time collaboration for Documents. Write together with our AI helper.",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -35,14 +38,13 @@ app.add_middleware(
     allow_origins=BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
 def build_error_response(status_code: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(
-        status_code=status_code,
-        content={"error": {"code": code, "message": message}}
+        status_code=status_code, content={"error": {"code": code, "message": message}}
     )
 
 
@@ -53,9 +55,15 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    _: Request, exc: RequestValidationError
+) -> JSONResponse:
     first_error = exc.errors()[0] if exc.errors() else None
-    message = first_error.get("msg", "Invalid request body") if first_error else "Invalid request body"
+    message = (
+        first_error.get("msg", "Invalid request body")
+        if first_error
+        else "Invalid request body"
+    )
     return build_error_response(422, "VALIDATION_ERROR", message)
 
 

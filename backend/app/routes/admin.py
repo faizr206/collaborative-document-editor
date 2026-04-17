@@ -80,7 +80,9 @@ def check_all_documents(
 
         edit_count = len(
             session.exec(
-                select(DocumentVersion).where(DocumentVersion.document_id == document.id)
+                select(DocumentVersion).where(
+                    DocumentVersion.document_id == document.id
+                )
             ).all()
         )
         ai_edits = len(

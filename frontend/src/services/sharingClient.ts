@@ -1,80 +1,98 @@
-import type { DocumentMember, DocumentRole, ShareLink } from "../lib/types";
-import { readStorage, writeStorage } from "../lib/storage";
-import { createId } from "../lib/utils";
+import { getAccessToken } from "../api/auth";
+import { API_BASE_URL } from "../config";
+import type { DocumentMember } from "../lib/types";
 
-type SharingRecord = {
-  members: DocumentMember[];
-  shareLinks: ShareLink[];
+type ApiErrorEnvelope = {
+  detail?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
 };
 
-const STORAGE_PREFIX = "frontend-only-sharing";
+type BackendMember = {
+  user_id: number;
+  username: string;
+  email: string;
+  permission: "owner" | "editor" | "viewer";
+};
 
-function key(documentId: number) {
-  return `${STORAGE_PREFIX}:${documentId}`;
-}
+type BackendMembersResponse = {
+  document_id: number;
+  title: string;
+  users: BackendMember[];
+};
 
-function readRecord(documentId: number): SharingRecord {
-  return readStorage<SharingRecord>(key(documentId), {
-    members: [],
-    shareLinks: []
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(init?.headers ?? {})
+    },
+    ...init
   });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const payload = (await response.json()) as ApiErrorEnvelope;
+      if (payload.detail) {
+        message = payload.detail;
+      }
+      if (payload.error?.message) {
+        message = payload.error.message;
+      }
+    } catch {
+      // Keep the fallback error.
+    }
+
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
 }
 
-function writeRecord(documentId: number, value: SharingRecord) {
-  writeStorage(key(documentId), value);
+function mapMember(member: BackendMember): DocumentMember {
+  return {
+    userId: String(member.user_id),
+    displayName: member.username,
+    email: member.email,
+    role: member.permission
+  };
 }
 
 export const sharingClient = {
-  async listMembers(documentId: number) {
-    return readRecord(documentId).members;
+  async listMembers(documentId: number): Promise<DocumentMember[]> {
+    const payload = await requestJson<BackendMembersResponse>(`/api/permissions/documents/${documentId}`);
+    return payload.users.map(mapMember);
   },
-  async inviteMember(documentId: number, input: { email: string; role: Exclude<DocumentRole, "owner"> }) {
-    const record = readRecord(documentId);
-    const displayName = input.email.split("@")[0] ?? input.email;
-    const nextMember: DocumentMember = {
-      userId: createId("usr"),
-      displayName,
-      email: input.email,
-      role: input.role
-    };
-
-    record.members = [nextMember, ...record.members];
-    writeRecord(documentId, record);
-    return nextMember;
+  async inviteMember(documentId: number, input: { identifier: string; role: "editor" | "viewer" }) {
+    const payload = await requestJson<BackendMember>(`/api/permissions/documents/${documentId}/members`, {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+    return mapMember(payload);
   },
-  async updateMemberRole(documentId: number, userId: string, role: Exclude<DocumentRole, "owner">) {
-    const record = readRecord(documentId);
-    record.members = record.members.map((member) =>
-      member.userId === userId ? { ...member, role } : member
+  async updateMemberRole(documentId: number, userId: string, role: "editor" | "viewer") {
+    const payload = await requestJson<BackendMember>(
+      `/api/permissions/documents/${documentId}/members/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ role })
+      }
     );
-    writeRecord(documentId, record);
+    return mapMember(payload);
   },
   async removeMember(documentId: number, userId: string) {
-    const record = readRecord(documentId);
-    record.members = record.members.filter((member) => member.userId !== userId);
-    writeRecord(documentId, record);
-  },
-  async listShareLinks(documentId: number) {
-    return readRecord(documentId).shareLinks;
-  },
-  async createShareLink(documentId: number, role: Exclude<DocumentRole, "owner">) {
-    const record = readRecord(documentId);
-    const nextLink: ShareLink = {
-      id: createId("shl"),
-      role,
-      url: `${window.location.origin}/invite/${createId("token")}`,
-      isActive: true,
-      expiresAt: null
-    };
-    record.shareLinks = [nextLink, ...record.shareLinks];
-    writeRecord(documentId, record);
-    return nextLink;
-  },
-  async disableShareLink(documentId: number, shareLinkId: string) {
-    const record = readRecord(documentId);
-    record.shareLinks = record.shareLinks.map((link) =>
-      link.id === shareLinkId ? { ...link, isActive: false } : link
-    );
-    writeRecord(documentId, record);
+    await requestJson(`/api/permissions/documents/${documentId}/members/${userId}`, {
+      method: "DELETE"
+    });
   }
 };

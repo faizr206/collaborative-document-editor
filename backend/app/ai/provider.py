@@ -33,11 +33,9 @@ class LLMProvider(Protocol):
     provider_name: str
     model_name: str
 
-    async def stream(self, request: LLMGenerationRequest) -> AsyncIterator[str]:
-        ...
+    async def stream(self, request: LLMGenerationRequest) -> AsyncIterator[str]: ...
 
-    async def generate(self, request: LLMGenerationRequest) -> str:
-        ...
+    async def generate(self, request: LLMGenerationRequest) -> str: ...
 
 
 class MockLLMProvider:
@@ -58,7 +56,7 @@ class MockLLMProvider:
 
         for index in range(0, len(full_text), chunk_size):
             await asyncio.sleep(0.03)
-            yield full_text[index:index + chunk_size]
+            yield full_text[index : index + chunk_size]
 
 
 class LMStudioProvider:
@@ -130,7 +128,9 @@ class LMStudioProvider:
                         try:
                             chunk = json.loads(data)
                         except json.JSONDecodeError as exc:
-                            raise ValueError("LM Studio returned malformed streaming JSON") from exc
+                            raise ValueError(
+                                "LM Studio returned malformed streaming JSON"
+                            ) from exc
 
                         choices = chunk.get("choices") or []
                         if not choices:
@@ -143,7 +143,9 @@ class LMStudioProvider:
         except httpx.HTTPError as exc:
             raise ValueError(f"LM Studio streaming request failed: {exc}") from exc
 
-    def _build_payload(self, request: LLMGenerationRequest, *, stream: bool) -> dict[str, Any]:
+    def _build_payload(
+        self, request: LLMGenerationRequest, *, stream: bool
+    ) -> dict[str, Any]:
         return {
             "model": self.model_name,
             "messages": [

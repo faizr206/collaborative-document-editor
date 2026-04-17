@@ -6,7 +6,12 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
-from app.ai.prompts import MAX_CONTEXT_CHARS, MAX_SOURCE_CHARS, PROMPT_VERSION, get_prompt_template
+from app.ai.prompts import (
+    MAX_CONTEXT_CHARS,
+    MAX_SOURCE_CHARS,
+    PROMPT_VERSION,
+    get_prompt_template,
+)
 from app.ai.provider import LLMGenerationRequest, get_provider
 
 
@@ -89,9 +94,13 @@ class AIService:
         self,
         prepared: PreparedPrompt,
     ) -> AsyncIterator[str]:
-        cancel_event = self._cancel_events.setdefault(prepared.request_id, asyncio.Event())
+        cancel_event = self._cancel_events.setdefault(
+            prepared.request_id, asyncio.Event()
+        )
         try:
-            async for chunk in self.provider.stream(self._to_provider_request(prepared)):
+            async for chunk in self.provider.stream(
+                self._to_provider_request(prepared)
+            ):
                 if cancel_event.is_set():
                     raise asyncio.CancelledError()
                 yield chunk

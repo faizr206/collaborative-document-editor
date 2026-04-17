@@ -119,6 +119,67 @@ Then open:
 ```text
 http://localhost:5173
 ```
+
+## Testing
+
+### Backend Tests
+
+Install dependencies first:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Run all backend tests:
+
+```bash
+cd backend
+source .venv/bin/activate
+PYTHONPATH=. pytest
+```
+
+Run only the document and AI access-control tests:
+
+```bash
+cd backend
+source .venv/bin/activate
+PYTHONPATH=. pytest tests/test_documents.py tests/test_ai.py
+```
+
+The `PYTHONPATH=.` prefix is required so `pytest` can import the `app` package from `backend/app`.
+
+### Frontend Tests
+
+Install dependencies first:
+
+```bash
+cd frontend
+npm install
+```
+
+Run all frontend tests:
+
+```bash
+cd frontend
+npm test
+```
+
+Run a single frontend test file:
+
+```bash
+cd frontend
+npm test -- --run src/features/editor/DocumentWorkspacePage.test.tsx
+```
+
+Run frontend tests in watch mode:
+
+```bash
+cd frontend
+npm run test:watch
+```
 ## Real-Time Collaboration 
 
 ### Implementation
