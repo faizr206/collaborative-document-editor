@@ -61,7 +61,6 @@ type StreamInput = {
   contextText: string | null;
   instruction: string | null;
   documentId: number;
-  userId: number;
   documentContent: string;
 };
 
@@ -264,7 +263,6 @@ export const aiClient = {
           context: input.contextText ?? "",
           instruction: input.instruction ?? "",
           document_id: input.documentId,
-          user_id: input.userId,
           document_content: input.documentContent,
           options: {}
         })
@@ -300,10 +298,8 @@ export const aiClient = {
     };
   },
 
-  async listHistory(input: { documentId: number; userId: number }): Promise<AiSuggestion[]> {
-    const payload = await requestJson<BackendAiHistoryResponse>(
-      `/api/ai/history/${input.documentId}?user_id=${input.userId}`
-    );
+  async listHistory(input: { documentId: number }): Promise<AiSuggestion[]> {
+    const payload = await requestJson<BackendAiHistoryResponse>(`/api/ai/history/${input.documentId}`);
     return payload.data.items.map(mapInteraction);
   },
 
@@ -315,7 +311,7 @@ export const aiClient = {
     acceptedParts?: number[];
   }): Promise<AiSuggestion> {
     const payload = await requestJson<{ data: BackendAiInteraction }>(
-      `/api/ai/interactions/${input.interactionId}/review?user_id=${input.userId}`,
+      `/api/ai/interactions/${input.interactionId}/review`,
       {
         method: "POST",
         body: JSON.stringify({

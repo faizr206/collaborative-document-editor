@@ -7,6 +7,12 @@ export type DocumentDto = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  role: "owner" | "editor" | "viewer";
+  owner: {
+    id: number;
+    username: string;
+    email: string;
+  };
 };
 
 type BackendDocument = {
@@ -15,9 +21,15 @@ type BackendDocument = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  role: "owner" | "editor" | "viewer";
+  owner: {
+    id: number;
+    username: string;
+    email: string;
+  };
 };
 
-type DocumentListItemDto = Pick<DocumentDto, "id" | "title" | "updatedAt">;
+type DocumentListItemDto = Pick<DocumentDto, "id" | "title" | "updatedAt" | "role" | "owner">;
 
 type DocumentResponseEnvelope = {
   data: {
@@ -54,7 +66,9 @@ function mapDocument(document: BackendDocument): DocumentDto {
     title: document.title,
     content: document.content,
     createdAt: document.createdAt,
-    updatedAt: document.updatedAt
+    updatedAt: document.updatedAt,
+    role: document.role,
+    owner: document.owner
   };
 }
 
@@ -85,6 +99,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
 
     throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -119,4 +137,10 @@ export async function updateDocument(
 export async function listDocuments(): Promise<DocumentListItemDto[]> {
   const payload = await requestJson<DocumentListResponseEnvelope>("/api/documents");
   return payload.data.items;
+}
+
+export async function deleteDocument(documentId: number): Promise<void> {
+  await requestJson(`/api/documents/${documentId}`, {
+    method: "DELETE"
+  });
 }

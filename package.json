@@ -5,5 +5,8 @@
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^6.0.2",
     "vite": "^8.0.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

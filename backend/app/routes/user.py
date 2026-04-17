@@ -1,6 +1,7 @@
 """
 routers/user_auth.py — User management endpoints.
 """
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlmodel import Session, select
 from app.db import get_session
@@ -15,26 +16,35 @@ from app.auth import (
     TokenResponse,
     TOKEN_EXPIRY_SECONDS,
 )
+
 router = APIRouter(prefix="/user_auth", tags=["user_auth"])
+
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserRegister, session: Session = Depends(get_session)):
-     username = session.exec(select(User).where(User.username == user.username)).first()
-     if username:
-          raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username exists")
-     new_user = User(username=user.username, 
-                     email=user.email, 
-                     password_hash=hash_password(user.password))
-     session.add(new_user)
-     session.commit()
-     session.refresh(new_user)
+    username = session.exec(select(User).where(User.username == user.username)).first()
+    if username:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username exists"
+        )
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        password_hash=hash_password(user.password),
+    )
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
 
-     return {"message": "user registered successfully"}
-     
+    return {"message": "user registered successfully"}
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(user: UserLogin, session: Session = Depends(get_session)):
     # Check if user exists
-    stored_user: User = session.exec(select(User).where(User.username == user.username)).first()
+    stored_user: User = session.exec(
+        select(User).where(User.username == user.username)
+    ).first()
 
     if stored_user is None:
         raise HTTPException(
@@ -56,6 +66,7 @@ async def login(user: UserLogin, session: Session = Depends(get_session)):
         access_token=access_token,
         expires_in=TOKEN_EXPIRY_SECONDS,
     )
+
 
 @router.get("/quick_secure_test")
 def quick_secure_route(current_user: CurrentUser):

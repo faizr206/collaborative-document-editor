@@ -125,14 +125,9 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     queryFn: () => versionsClient.list(documentId)
   });
 
-  const aiUserId = useMemo(() => {
-    const parsed = Number(session?.user.id);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-  }, [session?.user.id]);
-
   const aiHistoryQuery = useQuery({
-    queryKey: ["documents", documentId, "ai-history", aiUserId],
-    queryFn: () => aiClient.listHistory({ documentId, userId: aiUserId }),
+    queryKey: ["documents", documentId, "ai-history"],
+    queryFn: () => aiClient.listHistory({ documentId }),
     enabled: Boolean(documentQuery.data?.isAiEnabled) && !aiAccessDenied,
     retry: false
   });
@@ -449,7 +444,6 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     if (aiDraft.interactionId) {
       void aiClient.reviewSuggestion({
         interactionId: aiDraft.interactionId,
-        userId: aiUserId,
         reviewStatus,
         editedText: reviewStatus === "edited" ? aiDraft.resultText : null,
         acceptedParts: reviewStatus === "partially_accepted" ? acceptedParts : undefined
@@ -499,7 +493,6 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
         contextText: title,
         instruction: instruction.trim() || null,
         documentId,
-        userId: aiUserId,
         documentContent: content
       },
       {
@@ -615,7 +608,6 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     if (aiDraft?.interactionId) {
       await aiClient.reviewSuggestion({
         interactionId: aiDraft.interactionId,
-        userId: aiUserId,
         reviewStatus: "rejected"
       });
       void queryClient.invalidateQueries({ queryKey: ["documents", documentId, "ai-history"] });

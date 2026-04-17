@@ -68,7 +68,9 @@ class FakeAsyncClient:
 def test_lm_studio_provider_parses_generate_and_stream(monkeypatch):
     monkeypatch.setattr("app.ai.provider.httpx.AsyncClient", FakeAsyncClient)
 
-    provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model_name="qwen2.5-3b-instruct")
+    provider = LMStudioProvider(
+        base_url="http://127.0.0.1:1234/v1", model_name="qwen2.5-3b-instruct"
+    )
     request = LLMGenerationRequest(
         action_type="rewrite",
         prompt="Rewrite this text",

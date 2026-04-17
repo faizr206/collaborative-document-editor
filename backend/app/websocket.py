@@ -32,7 +32,9 @@ async def send_message(websocket: WebSocket, message: dict[str, Any]) -> None:
     await websocket.send_json(message)
 
 
-async def broadcast(room: RoomState, message: dict[str, Any], *, exclude_client_id: str | None = None) -> None:
+async def broadcast(
+    room: RoomState, message: dict[str, Any], *, exclude_client_id: str | None = None
+) -> None:
     disconnected: list[str] = []
 
     for client_id, connection in room.connections.items():
@@ -73,7 +75,9 @@ def _ensure_room(room_id: str, initial_document: dict[str, str] | None) -> RoomS
 
     seed = initial_document or {"title": "", "content": ""}
     room = RoomState(
-        document=CollaborativeDocument(title=seed.get("title", ""), content=seed.get("content", ""))
+        document=CollaborativeDocument(
+            title=seed.get("title", ""), content=seed.get("content", "")
+        )
     )
     rooms[room_id] = room
     return room
@@ -109,7 +113,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     continue
 
                 room = _ensure_room(room_id, message.get("document"))
-                room.connections[client_id] = Connection(websocket=websocket, client_id=client_id, user=user)
+                room.connections[client_id] = Connection(
+                    websocket=websocket, client_id=client_id, user=user
+                )
                 connection_rooms[websocket] = room_id
 
                 await send_message(
@@ -137,12 +143,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
 
             if not room_id or not client_id:
-                await send_message(websocket, {"type": "error", "message": "Join the room before editing."})
+                await send_message(
+                    websocket,
+                    {"type": "error", "message": "Join the room before editing."},
+                )
                 continue
 
             room = rooms.get(room_id)
             if not room:
-                await send_message(websocket, {"type": "error", "message": "Room not found."})
+                await send_message(
+                    websocket, {"type": "error", "message": "Room not found."}
+                )
                 continue
 
             if message_type == "operations":
@@ -180,7 +191,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 connection = room.connections.get(client_id)
                 if not connection:
-                    await send_message(websocket, {"type": "error", "message": "Connection not found."})
+                    await send_message(
+                        websocket, {"type": "error", "message": "Connection not found."}
+                    )
                     continue
 
                 connection.awareness = awareness
@@ -206,7 +219,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if message_type == "leave":
                 break
 
-            await send_message(websocket, {"type": "error", "message": "Unsupported websocket message."})
+            await send_message(
+                websocket,
+                {"type": "error", "message": "Unsupported websocket message."},
+            )
 
     except WebSocketDisconnect:
         pass
