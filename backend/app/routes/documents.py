@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from app.access import get_document_role, require_document_owner, require_document_role
-from app.auth import CurrentUser
+from app.auth import CurrentUser, create_collab_token
 from app.db import get_session
 from app.models import Document, DocumentPermission, DocumentVersion, User
 from app.schemas import (
@@ -81,7 +81,13 @@ def serialize_document_version(
     )
 
 
-def build_bootstrap_payload(document: Document, role: str) -> DocumentBootstrapResponse:
+def build_bootstrap_payload(
+    document: Document,
+    role: str,
+    *,
+    current_user: User,
+) -> DocumentBootstrapResponse:
+    room_id = f"doc_{document.id}"
     return DocumentBootstrapResponse(
         data={
             "document": DocumentBootstrapDocumentApi(
@@ -91,9 +97,14 @@ def build_bootstrap_payload(document: Document, role: str) -> DocumentBootstrapR
                 isAiEnabled=role != "viewer",
             ),
             "collab": {
-                "roomId": f"doc_{document.id}",
+                "roomId": room_id,
                 "websocketUrl": "/ws",
-                "token": None,
+                "token": create_collab_token(
+                    user_id=current_user.id,
+                    username=current_user.username,
+                    document_id=document.id,
+                    room_id=room_id,
+                ),
             },
         }
     )
@@ -299,7 +310,7 @@ def get_document_bootstrap(
     document, role = require_document_role(
         session, document_id, current_user.id, "viewer"
     )
-    return build_bootstrap_payload(document, role)
+    return build_bootstrap_payload(document, role, current_user=current_user)
 
 
 @router.get(
