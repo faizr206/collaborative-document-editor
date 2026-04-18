@@ -69,6 +69,28 @@ class DocumentResponse(BaseModel):
     data: DocumentEnvelope
 
 
+class DocumentBootstrapCollabApi(BaseModel):
+    roomId: str
+    websocketUrl: str
+    token: str | None = None
+
+
+class DocumentBootstrapDocumentApi(BaseModel):
+    id: int
+    title: str
+    role: Literal["owner", "editor", "viewer"]
+    isAiEnabled: bool
+
+
+class DocumentBootstrapEnvelope(BaseModel):
+    document: DocumentBootstrapDocumentApi
+    collab: DocumentBootstrapCollabApi
+
+
+class DocumentBootstrapResponse(BaseModel):
+    data: DocumentBootstrapEnvelope
+
+
 class DocumentListItem(BaseModel):
     id: int
     title: str
@@ -123,6 +145,43 @@ class DocumentPermissionsResponse(BaseModel):
     document_id: int
     title: str
     users: list[DocumentUserPermission]
+
+
+class DocumentVersionCreatedByApi(BaseModel):
+    id: int
+    displayName: str
+
+
+class DocumentVersionApi(BaseModel):
+    id: int
+    versionNumber: int
+    createdAt: str
+    title: str
+    createdBy: DocumentVersionCreatedByApi | None
+
+
+class DocumentVersionsEnvelope(BaseModel):
+    items: list[DocumentVersionApi]
+
+
+class DocumentVersionsResponse(BaseModel):
+    data: DocumentVersionsEnvelope
+
+
+class DocumentVersionEnvelope(BaseModel):
+    version: DocumentVersionApi
+
+
+class DocumentVersionResponse(BaseModel):
+    data: DocumentVersionEnvelope
+
+
+class DocumentVersionCreate(BaseModel):
+    label: str = Field(
+        min_length=1,
+        max_length=255,
+        example="Manual snapshot at 10:30",
+    )
 
 
 class AdminUserItem(BaseModel):

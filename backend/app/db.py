@@ -21,6 +21,7 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
     _ensure_user_is_admin_column()
     _ensure_ai_interaction_columns()
+    _ensure_document_version_columns()
 
 
 def _ensure_user_is_admin_column():
@@ -58,6 +59,24 @@ def _ensure_ai_interaction_columns():
         "response_chars": "ALTER TABLE ai_interactions ADD COLUMN response_chars INTEGER DEFAULT 0",
         "updated_at": "ALTER TABLE ai_interactions ADD COLUMN updated_at TIMESTAMP",
         "reviewed_at": "ALTER TABLE ai_interactions ADD COLUMN reviewed_at TIMESTAMP",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in desired_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(text(statement))
+
+
+def _ensure_document_version_columns():
+    inspector = inspect(engine)
+    if "document_versions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("document_versions")
+    }
+    desired_columns = {
+        "label": "ALTER TABLE document_versions ADD COLUMN label VARCHAR DEFAULT ''",
     }
 
     with engine.begin() as connection:

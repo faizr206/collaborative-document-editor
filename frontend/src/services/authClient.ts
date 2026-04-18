@@ -5,6 +5,7 @@ import {
   getCurrentUser,
   getStoredSession,
   login as loginRequest,
+  logout as logoutRequest,
   register as registerRequest,
   setStoredSession
 } from "../api/auth";
@@ -102,6 +103,7 @@ export const authClient = {
   },
 
   async logout(): Promise<void> {
+    await logoutRequest();
     saveSession(null);
     clearStoredSession();
   }

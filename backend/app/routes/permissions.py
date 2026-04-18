@@ -20,7 +20,10 @@ from app.schemas import (
     UserPermissionsResponse,
 )
 
-router = APIRouter(prefix="/api/permissions", tags=["permissions"])
+router = APIRouter(tags=["permissions"])
+
+LEGACY_BASE = "/api/permissions"
+V1_BASE = "/api/v1/documents"
 
 
 def _serialize_document_members(
@@ -55,7 +58,7 @@ def _serialize_document_members(
     )
 
 
-@router.get("/my", response_model=UserPermissionsResponse)
+@router.get(f"{LEGACY_BASE}/my", response_model=UserPermissionsResponse)
 def get_user_permissions(
     current_user: CurrentUser,
     session: Session = Depends(get_session),
@@ -77,7 +80,14 @@ def get_user_permissions(
     return UserPermissionsResponse(documents=items)
 
 
-@router.get("/documents/{document_id}", response_model=DocumentPermissionsResponse)
+@router.get(
+    f"{LEGACY_BASE}/documents/{{document_id}}",
+    response_model=DocumentPermissionsResponse,
+)
+@router.get(
+    f"{V1_BASE}/{{document_id}}/members",
+    response_model=DocumentPermissionsResponse,
+)
 def get_document_permissions(
     document_id: int,
     current_user: CurrentUser,
@@ -104,7 +114,12 @@ def get_document_permissions(
 
 
 @router.post(
-    "/documents/{document_id}/members",
+    f"{LEGACY_BASE}/documents/{{document_id}}/members",
+    response_model=DocumentUserPermission,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    f"{V1_BASE}/{{document_id}}/members",
     response_model=DocumentUserPermission,
     status_code=status.HTTP_201_CREATED,
 )
@@ -150,7 +165,12 @@ def grant_permission(
 
 
 @router.patch(
-    "/documents/{document_id}/members/{user_id}", response_model=DocumentUserPermission
+    f"{LEGACY_BASE}/documents/{{document_id}}/members/{{user_id}}",
+    response_model=DocumentUserPermission,
+)
+@router.patch(
+    f"{V1_BASE}/{{document_id}}/members/{{user_id}}",
+    response_model=DocumentUserPermission,
 )
 def update_member_role(
     document_id: int,
@@ -188,7 +208,12 @@ def update_member_role(
 
 
 @router.delete(
-    "/documents/{document_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+    f"{LEGACY_BASE}/documents/{{document_id}}/members/{{user_id}}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+@router.delete(
+    f"{V1_BASE}/{{document_id}}/members/{{user_id}}",
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_member(
     document_id: int,

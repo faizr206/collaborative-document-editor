@@ -305,7 +305,6 @@ export const aiClient = {
 
   async reviewSuggestion(input: {
     interactionId: number;
-    userId: number;
     reviewStatus: Extract<AiReviewStatus, "accepted" | "rejected" | "edited" | "partially_accepted">;
     editedText?: string | null;
     acceptedParts?: number[];

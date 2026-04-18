@@ -32,6 +32,7 @@ class AIRequest(BaseModel):
     document_content: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
 
+
 class AIAcceptRequest(BaseModel):
     suggestion: str
     accepted_parts: list[int]
@@ -130,6 +131,7 @@ def update_interaction(
 def format_sse_event(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
+
 def split_suggestion_parts(suggestion: str) -> list[str]:
     normalized = suggestion.strip()
     if not normalized:
@@ -140,16 +142,18 @@ def split_suggestion_parts(suggestion: str) -> list[str]:
         return lines
 
     sentence_parts = [
-        part.strip()
-        for part in re.split(r"(?<=[.!?])\s+", normalized)
-        if part.strip()
+        part.strip() for part in re.split(r"(?<=[.!?])\s+", normalized) if part.strip()
     ]
     return sentence_parts or [normalized]
 
 
-def build_partial_acceptance_result(suggestion: str, accepted_parts: list[int]) -> dict[str, Any]:
+def build_partial_acceptance_result(
+    suggestion: str, accepted_parts: list[int]
+) -> dict[str, Any]:
     parts = split_suggestion_parts(suggestion)
-    accepted_indexes = sorted({index for index in accepted_parts if 0 <= index < len(parts)})
+    accepted_indexes = sorted(
+        {index for index in accepted_parts if 0 <= index < len(parts)}
+    )
     accepted = [parts[index] for index in accepted_indexes]
     final_text = " ".join(accepted).strip()
     return {
@@ -390,9 +394,14 @@ def review_ai_interaction(
         interaction.response_chars = len(payload.edited_text)
     elif payload.review_status == "partially_accepted":
         accepted_parts = payload.accepted_parts or []
-        partial_acceptance = build_partial_acceptance_result(interaction.result_text, accepted_parts)
+        partial_acceptance = build_partial_acceptance_result(
+            interaction.result_text, accepted_parts
+        )
         if not partial_acceptance["acceptedParts"]:
-            raise HTTPException(status_code=400, detail="accepted_parts must include at least one valid suggestion part")
+            raise HTTPException(
+                status_code=400,
+                detail="accepted_parts must include at least one valid suggestion part",
+            )
         interaction.result_text = partial_acceptance["resultText"]
         interaction.response_chars = len(interaction.result_text)
     interaction.reviewed_at = datetime.now(timezone.utc)
@@ -404,6 +413,11 @@ def review_ai_interaction(
 
     return {"data": serialize_interaction(interaction)}
 
+
 @router.post("/partial-accept")
 def partial_accept_ai_suggestion(payload: AIAcceptRequest):
-    return {"data": build_partial_acceptance_result(payload.suggestion, payload.accepted_parts)}
+    return {
+        "data": build_partial_acceptance_result(
+            payload.suggestion, payload.accepted_parts
+        )
+    }
