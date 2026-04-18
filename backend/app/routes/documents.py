@@ -25,7 +25,6 @@ from app.schemas import (
 
 router = APIRouter(tags=["documents"])
 
-LEGACY_BASE = "/api/documents"
 V1_BASE = "/api/v1/documents"
 
 
@@ -155,11 +154,6 @@ def list_document_versions_payload(
 
 
 @router.post(
-    LEGACY_BASE,
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-@router.post(
     V1_BASE,
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
@@ -190,7 +184,6 @@ def create_document(
     return serialize_document(new_doc, current_user, "owner")
 
 
-@router.get(LEGACY_BASE, response_model=DocumentListResponse)
 @router.get(V1_BASE, response_model=DocumentListResponse)
 def list_documents(
     current_user: CurrentUser,
@@ -224,7 +217,6 @@ def list_documents(
     return {"data": {"items": items}}
 
 
-@router.get(f"{LEGACY_BASE}/my/documents", response_model=DocumentListResponse)
 @router.get(f"{V1_BASE}/my/documents", response_model=DocumentListResponse)
 def list_documents_of_current_user(
     current_user: CurrentUser,
@@ -233,7 +225,6 @@ def list_documents_of_current_user(
     return list_documents(current_user=current_user, session=session)
 
 
-@router.get(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.get(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def get_document_by_id(
     document_id: int,
@@ -247,7 +238,6 @@ def get_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.put(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.put(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.patch(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def update_document_by_id(
@@ -278,7 +268,6 @@ def update_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.delete(f"{LEGACY_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete(f"{V1_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_id(
     document_id: int,

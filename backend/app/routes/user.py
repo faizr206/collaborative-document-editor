@@ -20,7 +20,6 @@ from app.models import User
 router = APIRouter(tags=["user_auth"])
 
 
-@router.post("/user_auth/register", status_code=status.HTTP_201_CREATED)
 @router.post("/api/v1/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserRegister, session: Session = Depends(get_session)):
     username = session.exec(select(User).where(User.username == user.username)).first()
@@ -40,7 +39,6 @@ async def register(user: UserRegister, session: Session = Depends(get_session)):
     return {"message": "user registered successfully"}
 
 
-@router.post("/user_auth/login", response_model=TokenResponse)
 @router.post("/api/v1/auth/login", response_model=TokenResponse)
 async def login(user: UserLogin, session: Session = Depends(get_session)):
     stored_user: User = session.exec(
@@ -72,7 +70,6 @@ async def logout():
     return {"data": {"loggedOut": True}}
 
 
-@router.get("/user_auth/quick_secure_test")
 @router.get("/api/v1/auth/me")
 def quick_secure_route(current_user: CurrentUser):
     return {"message": "This is a secure route test", "user": current_user}

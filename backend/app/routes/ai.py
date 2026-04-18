@@ -17,7 +17,7 @@ from app.auth import CurrentUser
 from app.db import get_session
 from app.models import AIInteraction
 
-router = APIRouter(prefix="/api/ai", tags=["AI"])
+router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
 
 ai_service = AIService()
 
