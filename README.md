@@ -1,28 +1,32 @@
 # Collaborative Document Editor
 
-This project has:
+This repository contains:
 
 - a FastAPI backend in `backend/`
 - a React + Vite frontend in `frontend/`
 
+The implementation now exposes the main document/auth flows under `/api/v1`, while keeping some legacy routes for compatibility.
+
 ## Prerequisites
 
-Make sure you have these installed:
+Make sure these are installed:
 
 - Python 3.10+
 - Node.js 18+
 - npm
 - SQLite
 
-## Backend
+## Setup
 
-The backend uses SQLite and stores data in:
+### Backend
+
+The backend stores SQLite data in:
 
 ```text
 backend/sqlite.db
 ```
 
-Then install the backend dependencies:
+Install backend dependencies:
 
 ```bash
 cd backend
@@ -31,31 +35,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a shared root env file before starting the apps:
-
-```bash
-cp .env.example .env
-```
-
-Start the backend server:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The backend will run on:
-
-```text
-http://localhost:8000
-```
-
-Quick health check:
-
-```bash
-curl http://localhost:8000/health
-```
-
-## Frontend
+### Frontend
 
 Install frontend dependencies:
 
@@ -64,23 +44,15 @@ cd frontend
 npm install
 ```
 
-Start the frontend development server:
+### Environment
+
+Create a root `.env` file before starting the apps:
 
 ```bash
-npm run dev
+cp .env.example .env
 ```
 
-The frontend will run on:
-
-```text
-http://localhost:5173
-```
-
-## Frontend API Configuration
-
-The frontend and backend now share the same root `.env` file.
-
-Important variables in `.env.example`:
+Important variables:
 
 ```bash
 VITE_API_BASE_URL=http://127.0.0.1:8000
@@ -91,12 +63,27 @@ LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
 LM_STUDIO_MODEL=qwen2.5-3b-instruct
 ```
 
-The frontend reads `VITE_API_BASE_URL` from the repo root `.env`.
-The backend reads the same root `.env` automatically via `python-dotenv`.
+The frontend reads `VITE_API_BASE_URL` from the root `.env`.
+The backend reads the same `.env` via `python-dotenv`.
 
-## Run Both
+## Run the App
 
-Use two terminals:
+### Option 1: Run both services automatically
+
+From the repository root:
+
+```bash
+sh run-dev.sh
+```
+
+This starts:
+
+- backend on `http://127.0.0.1:8000`
+- frontend on `http://127.0.0.1:5173`
+
+Press `Ctrl+C` to stop both.
+
+### Option 2: Run manually in two terminals
 
 Terminal 1:
 
@@ -110,7 +97,6 @@ Terminal 2:
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
@@ -120,18 +106,29 @@ Then open:
 http://localhost:5173
 ```
 
-## Testing
+## Useful Endpoints
 
-### Backend Tests
-
-Install dependencies first:
+### Health
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+curl http://localhost:8000/health
 ```
+
+### Main API namespace
+
+The current frontend uses the `/api/v1` namespace for:
+
+- auth: `/api/v1/auth/*`
+- documents: `/api/v1/documents/*`
+- sharing: `/api/v1/documents/{id}/members`
+- bootstrap: `/api/v1/documents/{id}/bootstrap`
+- versions: `/api/v1/documents/{id}/versions`
+
+AI routes are still served under `/api/ai/*`.
+
+## Testing
+
+### Backend tests
 
 Run all backend tests:
 
@@ -141,61 +138,43 @@ source .venv/bin/activate
 PYTHONPATH=. pytest
 ```
 
-Run only the document and AI access-control tests:
+Run the core backend suites used for the recent changes:
 
 ```bash
 cd backend
 source .venv/bin/activate
-PYTHONPATH=. pytest tests/test_documents.py tests/test_ai.py
+PYTHONPATH=. pytest tests/test_documents.py tests/test_ai.py tests/test_websocket.py
 ```
 
-The `PYTHONPATH=.` prefix is required so `pytest` can import the `app` package from `backend/app`.
-
-### Frontend Tests
-
-Install dependencies first:
+### Frontend build check
 
 ```bash
 cd frontend
-npm install
+npm run build
 ```
 
-Run all frontend tests:
+### Frontend tests
 
 ```bash
 cd frontend
 npm test
 ```
 
-Run a single frontend test file:
+Single test file:
 
 ```bash
 cd frontend
 npm test -- --run src/features/editor/DocumentWorkspacePage.test.tsx
 ```
 
-Run frontend tests in watch mode:
+Watch mode:
 
 ```bash
 cd frontend
 npm run test:watch
 ```
 
-### End-to-End Tests
-
-The frontend also includes Playwright end-to-end tests in `frontend/e2e/`.
-
-Install dependencies first:
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-cd ../frontend
-npm install
-```
+### End-to-end tests
 
 Install the Playwright browser once if needed:
 
@@ -204,20 +183,20 @@ cd frontend
 npx playwright install chromium
 ```
 
-Run the full e2e suite:
+Run the e2e suite:
 
 ```bash
 cd frontend
 npm run test:e2e
 ```
 
-What this does automatically:
+This automatically:
 
 - starts the FastAPI backend on `http://127.0.0.1:8010`
 - starts the Vite frontend on `http://127.0.0.1:4173`
-- uses the mock AI provider for deterministic AI flows
+- uses the mock AI provider for deterministic flows
 - creates an isolated temporary SQLite database for the test run
-- deletes that temporary e2e database after the run finishes
+- deletes that temporary database after the run finishes
 
 Current e2e coverage includes:
 
@@ -226,42 +205,22 @@ Current e2e coverage includes:
 - document sharing and viewer read-only access
 - login through AI suggestion acceptance
 
-## Real-Time Collaboration 
+## Real-Time Collaboration
 
-### Implementation
-The real-time feature was implemented using WebSockets in the backend.
+### Current implementation
 
-- A WebSocket endpoint (`/ws`) was created
-- Multiple users can connect simultaneously
-- Messages are broadcast to all connected users
-- Active users are tracked
+Realtime collaboration is implemented with a backend WebSocket endpoint at `/ws`.
 
-### Presence
-- When a user connects, all clients receive a "User joined" message
-- When a user disconnects, all clients receive a "User left" message
+The current flow supports:
 
-### Testing
+- multiple simultaneous clients
+- document operation broadcast
+- collaborator presence
+- cursor/selection awareness
 
-#### Manual Testing
-- Open the application in two browser tabs
-- Send a message in one tab
-- The message appears instantly in the other tab
-- Closing a tab shows a "user left" message
+### Deliberate simplification
 
-#### Automated Testing
-Automated backend tests were implemented using FastAPI TestClient.
+The assignment design describes a more separated and scalable realtime architecture.
+This implementation keeps realtime inside the backend app for easier local testing and lower setup complexity.
 
-These tests verify:
-- successful WebSocket connection
-- message broadcasting between multiple clients
-- proper handling of client connections
-
-All tests passed successfully.
-
-### Architecture Deviation
-
-In Assignment 1, real-time collaboration was designed as a separate service.
-
-In this implementation, it was integrated directly into the backend for simplicity and easier local testing.
-
-While separating it into its own service could improve scalability, combining it is sufficient for this assignment.
+That is acceptable for the current assignment-scale prototype, but it is documented as a remaining deviation in `DEVIATIONS.md`.

@@ -1,22 +1,32 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from app.access import get_document_role, require_document_owner, require_document_role
 from app.auth import CurrentUser
 from app.db import get_session
-from app.models import Document, DocumentPermission, User
+from app.models import Document, DocumentPermission, DocumentVersion, User
 from app.schemas import (
+    DocumentBootstrapDocumentApi,
+    DocumentBootstrapResponse,
     DocumentCreate,
     DocumentListItem,
     DocumentListResponse,
     DocumentOwnerApi,
     DocumentResponse,
     DocumentUpdate,
+    DocumentVersionApi,
+    DocumentVersionCreate,
+    DocumentVersionCreatedByApi,
+    DocumentVersionResponse,
+    DocumentVersionsResponse,
 )
 
-router = APIRouter(prefix="/api/documents", tags=["documents"])
+router = APIRouter(tags=["documents"])
+
+LEGACY_BASE = "/api/documents"
+V1_BASE = "/api/v1/documents"
 
 
 def serialize_timestamp(value: datetime) -> str:
@@ -51,7 +61,98 @@ def serialize_document(document: Document, owner: User | None, role: str) -> dic
     }
 
 
-@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+def serialize_document_version(
+    version: DocumentVersion,
+    *,
+    version_number: int,
+    author: User | None,
+) -> DocumentVersionApi:
+    return DocumentVersionApi(
+        id=version.id,
+        versionNumber=version_number,
+        createdAt=serialize_timestamp(version.created_at),
+        title=version.label or "Snapshot",
+        createdBy=DocumentVersionCreatedByApi(
+            id=author.id,
+            displayName=author.username,
+        )
+        if author
+        else None,
+    )
+
+
+def build_bootstrap_payload(document: Document, role: str) -> DocumentBootstrapResponse:
+    return DocumentBootstrapResponse(
+        data={
+            "document": DocumentBootstrapDocumentApi(
+                id=document.id,
+                title=document.title,
+                role=role,
+                isAiEnabled=role != "viewer",
+            ),
+            "collab": {
+                "roomId": f"doc_{document.id}",
+                "websocketUrl": "/ws",
+                "token": None,
+            },
+        }
+    )
+
+
+def create_snapshot(
+    *,
+    session: Session,
+    document: Document,
+    user_id: int,
+    label: str,
+) -> DocumentVersion:
+    snapshot = DocumentVersion(
+        document_id=document.id,
+        content=document.content,
+        label=label,
+        edited_by=user_id,
+    )
+    session.add(snapshot)
+    session.commit()
+    session.refresh(snapshot)
+    return snapshot
+
+
+def list_document_versions_payload(
+    session: Session,
+    document_id: int,
+) -> DocumentVersionsResponse:
+    versions = session.exec(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == document_id)
+        .order_by(DocumentVersion.created_at.desc(), DocumentVersion.id.desc())
+    ).all()
+
+    total = len(versions)
+    items = []
+    for index, version in enumerate(versions):
+        author = session.get(User, version.edited_by)
+        items.append(
+            serialize_document_version(
+                version,
+                version_number=total - index,
+                author=author,
+            )
+        )
+
+    return DocumentVersionsResponse(data={"items": items})
+
+
+@router.post(
+    LEGACY_BASE,
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    V1_BASE,
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_document(
     document: DocumentCreate,
     current_user: CurrentUser,
@@ -78,7 +179,8 @@ def create_document(
     return serialize_document(new_doc, current_user, "owner")
 
 
-@router.get("", response_model=DocumentListResponse)
+@router.get(LEGACY_BASE, response_model=DocumentListResponse)
+@router.get(V1_BASE, response_model=DocumentListResponse)
 def list_documents(
     current_user: CurrentUser,
     session: Session = Depends(get_session),
@@ -111,7 +213,8 @@ def list_documents(
     return {"data": {"items": items}}
 
 
-@router.get("/my/documents", response_model=DocumentListResponse)
+@router.get(f"{LEGACY_BASE}/my/documents", response_model=DocumentListResponse)
+@router.get(f"{V1_BASE}/my/documents", response_model=DocumentListResponse)
 def list_documents_of_current_user(
     current_user: CurrentUser,
     session: Session = Depends(get_session),
@@ -119,7 +222,8 @@ def list_documents_of_current_user(
     return list_documents(current_user=current_user, session=session)
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+@router.get(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
+@router.get(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def get_document_by_id(
     document_id: int,
     current_user: CurrentUser,
@@ -132,7 +236,9 @@ def get_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.put("/{document_id}", response_model=DocumentResponse)
+@router.put(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
+@router.put(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
+@router.patch(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def update_document_by_id(
     document_id: int,
     document_update: DocumentUpdate,
@@ -161,7 +267,8 @@ def update_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(f"{LEGACY_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(f"{V1_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_id(
     document_id: int,
     current_user: CurrentUser,
@@ -178,3 +285,88 @@ def delete_document_by_id(
     session.delete(document)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    f"{V1_BASE}/{{document_id}}/bootstrap",
+    response_model=DocumentBootstrapResponse,
+)
+def get_document_bootstrap(
+    document_id: int,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+):
+    document, role = require_document_role(
+        session, document_id, current_user.id, "viewer"
+    )
+    return build_bootstrap_payload(document, role)
+
+
+@router.get(
+    f"{V1_BASE}/{{document_id}}/versions",
+    response_model=DocumentVersionsResponse,
+)
+def list_document_versions(
+    document_id: int,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+):
+    require_document_role(session, document_id, current_user.id, "viewer")
+    return list_document_versions_payload(session, document_id)
+
+
+@router.post(
+    f"{V1_BASE}/{{document_id}}/versions",
+    response_model=DocumentVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_document_version(
+    document_id: int,
+    payload: DocumentVersionCreate,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+):
+    document, _ = require_document_role(session, document_id, current_user.id, "editor")
+    snapshot = create_snapshot(
+        session=session,
+        document=document,
+        user_id=current_user.id,
+        label=payload.label,
+    )
+    versions = list_document_versions_payload(session, document_id).data.items
+    created = next(version for version in versions if version.id == snapshot.id)
+    return {"data": {"version": created}}
+
+
+@router.post(
+    f"{V1_BASE}/{{document_id}}/versions/{{version_id}}/restore",
+    response_model=DocumentResponse,
+)
+def restore_document_version(
+    document_id: int,
+    version_id: int,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+):
+    document, role = require_document_role(
+        session, document_id, current_user.id, "editor"
+    )
+    version = session.get(DocumentVersion, version_id)
+    if version is None or version.document_id != document_id:
+        raise HTTPException(status_code=404, detail="Document version not found")
+
+    document.content = version.content
+    document.updated_at = datetime.now(timezone.utc)
+    session.add(document)
+    session.commit()
+    session.refresh(document)
+
+    create_snapshot(
+        session=session,
+        document=document,
+        user_id=current_user.id,
+        label=f"Restored from snapshot #{version.id}",
+    )
+
+    owner = session.get(User, document.owner_id)
+    return serialize_document(document, owner, role)

@@ -6,6 +6,7 @@ import {
   updateDocument,
   type DocumentDto
 } from "../api/documents";
+import { getAccessToken } from "../api/auth";
 import type {
   ConnectionIndicator,
   DocumentBootstrap,
@@ -16,6 +17,38 @@ import type {
 } from "../lib/types";
 import { API_BASE_URL, toWebSocketUrl } from "../config";
 import { getInitials } from "../lib/utils";
+
+type BootstrapResponse = {
+  data: {
+    document: {
+      id: number;
+      title: string;
+      role: "owner" | "editor" | "viewer";
+      isAiEnabled: boolean;
+    };
+    collab: {
+      roomId: string;
+      websocketUrl: string;
+      token: string | null;
+    };
+  };
+};
+
+async function requestJson<T>(path: string): Promise<T> {
+  const accessToken = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
 
 function mapDocument(document: DocumentDto): DocumentDetails {
   return {
@@ -76,7 +109,12 @@ export const documentsClient = {
     await deleteDocument(documentId);
   },
   async bootstrap(documentId: number, session: SessionState | null): Promise<DocumentBootstrap> {
-    const document = await this.get(documentId);
+    const payload = await requestJson<BootstrapResponse>(`/api/v1/documents/${documentId}/bootstrap`);
+    const document = payload.data.document;
+    const websocketUrl = payload.data.collab.websocketUrl.startsWith("ws")
+      ? payload.data.collab.websocketUrl
+      : `${toWebSocketUrl(API_BASE_URL)}${payload.data.collab.websocketUrl}`;
+
     return {
       document: {
         id: document.id,
@@ -86,9 +124,9 @@ export const documentsClient = {
       },
       collab: {
         provider: "websocket",
-        roomId: `doc_${documentId}`,
-        websocketUrl: `${toWebSocketUrl(API_BASE_URL)}/ws`,
-        token: null
+        roomId: payload.data.collab.roomId,
+        websocketUrl,
+        token: payload.data.collab.token
       },
       presence: {
         self: toPresenceUser(session?.user ?? null)

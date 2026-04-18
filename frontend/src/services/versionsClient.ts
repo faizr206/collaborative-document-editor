@@ -1,32 +1,78 @@
+import { getAccessToken } from "../api/auth";
+import { API_BASE_URL } from "../config";
 import type { DocumentVersion, SessionState } from "../lib/types";
-import { readStorage, writeStorage } from "../lib/storage";
-import { createId } from "../lib/utils";
 
-const STORAGE_PREFIX = "frontend-only-versions";
+type BackendVersion = {
+  id: number;
+  versionNumber: number;
+  createdAt: string;
+  title: string;
+  createdBy: {
+    id: number;
+    displayName: string;
+  } | null;
+};
 
-function key(documentId: number) {
-  return `${STORAGE_PREFIX}:${documentId}`;
+type BackendVersionsResponse = {
+  data: {
+    items: BackendVersion[];
+  };
+};
+
+type BackendVersionResponse = {
+  data: {
+    version: BackendVersion;
+  };
+};
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(init?.headers ?? {})
+    },
+    ...init
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+function mapVersion(version: BackendVersion): DocumentVersion {
+  return {
+    id: String(version.id),
+    versionNumber: version.versionNumber,
+    createdAt: version.createdAt,
+    title: version.title,
+    createdBy: version.createdBy
+      ? {
+          id: String(version.createdBy.id),
+          displayName: version.createdBy.displayName
+        }
+      : null
+  };
 }
 
 export const versionsClient = {
   async list(documentId: number): Promise<DocumentVersion[]> {
-    return readStorage<DocumentVersion[]>(key(documentId), []);
+    const payload = await requestJson<BackendVersionsResponse>(
+      `/api/v1/documents/${documentId}/versions`
+    );
+    return payload.data.items.map(mapVersion);
   },
-  async create(documentId: number, session: SessionState | null, title: string) {
-    const versions = readStorage<DocumentVersion[]>(key(documentId), []);
-    const nextVersion: DocumentVersion = {
-      id: createId("ver"),
-      versionNumber: versions.length + 1,
-      createdAt: new Date().toISOString(),
-      title,
-      createdBy: session
-        ? {
-            id: session.user.id,
-            displayName: session.user.displayName
-          }
-        : null
-    };
-    writeStorage(key(documentId), [nextVersion, ...versions]);
-    return nextVersion;
+  async create(documentId: number, _session: SessionState | null, title: string) {
+    const payload = await requestJson<BackendVersionResponse>(
+      `/api/v1/documents/${documentId}/versions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ label: title })
+      }
+    );
+    return mapVersion(payload.data.version);
   }
 };

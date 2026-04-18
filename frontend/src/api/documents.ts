@@ -109,7 +109,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>("/api/documents", {
+  const payload = await requestJson<DocumentResponseEnvelope>("/api/v1/documents", {
     method: "POST",
     body: JSON.stringify(input)
   });
@@ -118,7 +118,7 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
 }
 
 export async function getDocument(documentId: number): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>(`/api/documents/${documentId}`);
+  const payload = await requestJson<DocumentResponseEnvelope>(`/api/v1/documents/${documentId}`);
   return mapDocument(payload.data.document);
 }
 
@@ -126,8 +126,8 @@ export async function updateDocument(
   documentId: number,
   input: UpdateDocumentInput
 ): Promise<DocumentDto> {
-  const payload = await requestJson<DocumentResponseEnvelope>(`/api/documents/${documentId}`, {
-    method: "PUT",
+  const payload = await requestJson<DocumentResponseEnvelope>(`/api/v1/documents/${documentId}`, {
+    method: "PATCH",
     body: JSON.stringify(input)
   });
 
@@ -135,12 +135,12 @@ export async function updateDocument(
 }
 
 export async function listDocuments(): Promise<DocumentListItemDto[]> {
-  const payload = await requestJson<DocumentListResponseEnvelope>("/api/documents");
+  const payload = await requestJson<DocumentListResponseEnvelope>("/api/v1/documents");
   return payload.data.items;
 }
 
 export async function deleteDocument(documentId: number): Promise<void> {
-  await requestJson(`/api/documents/${documentId}`, {
+  await requestJson(`/api/v1/documents/${documentId}`, {
     method: "DELETE"
   });
 }

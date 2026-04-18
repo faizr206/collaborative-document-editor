@@ -8,7 +8,6 @@ from app.ai.provider import MockLLMProvider
 from app.db import create_db_and_tables, engine
 from app.main import app
 from app.models import AIInteraction, Document, DocumentPermission
-from app.ai.provider import MockLLMProvider
 from app.routes.ai import ai_service
 
 

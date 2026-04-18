@@ -108,7 +108,7 @@ export async function getCurrentUser(): Promise<CurrentUserResponse["user"]> {
     throw new Error("No access token found.");
   }
 
-  const response = await requestJson<CurrentUserResponse>("/user_auth/quick_secure_test", {
+  const response = await requestJson<CurrentUserResponse>("/api/v1/auth/me", {
     headers: {
       Authorization: `Bearer ${accessToken}`
     }
@@ -118,7 +118,7 @@ export async function getCurrentUser(): Promise<CurrentUserResponse["user"]> {
 }
 
 export async function login(input: LoginInput): Promise<AuthSession> {
-  const response = await requestJson<LoginResponse>("/user_auth/login", {
+  const response = await requestJson<LoginResponse>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify(input)
   });
@@ -137,8 +137,14 @@ export async function login(input: LoginInput): Promise<AuthSession> {
 }
 
 export async function register(input: RegisterInput): Promise<void> {
-  await requestJson("/user_auth/register", {
+  await requestJson("/api/v1/auth/register", {
     method: "POST",
     body: JSON.stringify(input)
+  });
+}
+
+export async function logout(): Promise<void> {
+  await requestJson("/api/v1/auth/logout", {
+    method: "POST"
   });
 }

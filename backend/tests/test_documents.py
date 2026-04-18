@@ -4,16 +4,18 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 from app.config import resolve_database_url
-from app.db import engine
+from app.db import create_db_and_tables, engine
 from app.main import app
-from app.models import Document, DocumentPermission, User
+from app.models import Document, DocumentPermission, DocumentVersion, User
 
 
 client = TestClient(app)
 
 
 def setup_function():
+    create_db_and_tables()
     with Session(engine) as session:
+        session.exec(delete(DocumentVersion))
         session.exec(delete(DocumentPermission))
         session.exec(delete(Document))
         session.commit()
@@ -220,3 +222,93 @@ def test_resolve_database_url_uses_repo_stable_sqlite_location():
 
     resolved_backend_path = resolve_database_url("sqlite:///backend/sqlite.db")
     assert resolved_backend_path.endswith("/backend/sqlite.db")
+
+
+def test_v1_document_routes_support_bootstrap_and_patch_update():
+    headers = create_authenticated_user()
+
+    create_response = client.post(
+        "/api/v1/documents",
+        headers=headers,
+        json={"title": "Spec Document", "content": "<p>Original</p>"},
+    )
+    assert create_response.status_code == 201
+    document_id = create_response.json()["data"]["document"]["id"]
+
+    bootstrap_response = client.get(
+        f"/api/v1/documents/{document_id}/bootstrap",
+        headers=headers,
+    )
+    assert bootstrap_response.status_code == 200
+    bootstrap_payload = bootstrap_response.json()["data"]
+    assert bootstrap_payload["document"]["id"] == document_id
+    assert bootstrap_payload["collab"]["roomId"] == f"doc_{document_id}"
+    assert bootstrap_payload["collab"]["websocketUrl"] == "/ws"
+
+    patch_response = client.patch(
+        f"/api/v1/documents/{document_id}",
+        headers=headers,
+        json={"title": "Patched title", "content": "<p>Updated</p>"},
+    )
+    assert patch_response.status_code == 200
+    assert patch_response.json()["data"]["document"]["title"] == "Patched title"
+    assert patch_response.json()["data"]["document"]["content"] == "<p>Updated</p>"
+
+
+def test_v1_version_routes_create_list_and_restore_snapshots():
+    headers = create_authenticated_user()
+
+    create_response = client.post(
+        "/api/v1/documents",
+        headers=headers,
+        json={"title": "Versioned Doc", "content": "<p>Draft 1</p>"},
+    )
+    assert create_response.status_code == 201
+    document_id = create_response.json()["data"]["document"]["id"]
+
+    first_snapshot = client.post(
+        f"/api/v1/documents/{document_id}/versions",
+        headers=headers,
+        json={"label": "First snapshot"},
+    )
+    assert first_snapshot.status_code == 201
+    first_version_id = first_snapshot.json()["data"]["version"]["id"]
+
+    patch_response = client.patch(
+        f"/api/v1/documents/{document_id}",
+        headers=headers,
+        json={"content": "<p>Draft 2</p>"},
+    )
+    assert patch_response.status_code == 200
+
+    second_snapshot = client.post(
+        f"/api/v1/documents/{document_id}/versions",
+        headers=headers,
+        json={"label": "Second snapshot"},
+    )
+    assert second_snapshot.status_code == 201
+
+    versions_response = client.get(
+        f"/api/v1/documents/{document_id}/versions",
+        headers=headers,
+    )
+    assert versions_response.status_code == 200
+    versions = versions_response.json()["data"]["items"]
+    assert len(versions) == 2
+    assert versions[0]["title"] == "Second snapshot"
+    assert versions[1]["title"] == "First snapshot"
+
+    restore_response = client.post(
+        f"/api/v1/documents/{document_id}/versions/{first_version_id}/restore",
+        headers=headers,
+    )
+    assert restore_response.status_code == 200
+    restored_document = restore_response.json()["data"]["document"]
+    assert restored_document["content"] == "<p>Draft 1</p>"
+
+    versions_after_restore = client.get(
+        f"/api/v1/documents/{document_id}/versions",
+        headers=headers,
+    )
+    assert versions_after_restore.status_code == 200
+    assert len(versions_after_restore.json()["data"]["items"]) == 3

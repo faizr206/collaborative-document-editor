@@ -70,11 +70,11 @@ function mapMember(member: BackendMember): DocumentMember {
 
 export const sharingClient = {
   async listMembers(documentId: number): Promise<DocumentMember[]> {
-    const payload = await requestJson<BackendMembersResponse>(`/api/permissions/documents/${documentId}`);
+    const payload = await requestJson<BackendMembersResponse>(`/api/v1/documents/${documentId}/members`);
     return payload.users.map(mapMember);
   },
   async inviteMember(documentId: number, input: { identifier: string; role: "editor" | "viewer" }) {
-    const payload = await requestJson<BackendMember>(`/api/permissions/documents/${documentId}/members`, {
+    const payload = await requestJson<BackendMember>(`/api/v1/documents/${documentId}/members`, {
       method: "POST",
       body: JSON.stringify(input)
     });
@@ -82,7 +82,7 @@ export const sharingClient = {
   },
   async updateMemberRole(documentId: number, userId: string, role: "editor" | "viewer") {
     const payload = await requestJson<BackendMember>(
-      `/api/permissions/documents/${documentId}/members/${userId}`,
+      `/api/v1/documents/${documentId}/members/${userId}`,
       {
         method: "PATCH",
         body: JSON.stringify({ role })
@@ -91,7 +91,7 @@ export const sharingClient = {
     return mapMember(payload);
   },
   async removeMember(documentId: number, userId: string) {
-    await requestJson(`/api/permissions/documents/${documentId}/members/${userId}`, {
+    await requestJson(`/api/v1/documents/${documentId}/members/${userId}`, {
       method: "DELETE"
     });
   }
