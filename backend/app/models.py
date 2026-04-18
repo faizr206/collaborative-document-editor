@@ -3,8 +3,8 @@ models.py — SQL models.
 """
 
 from sqlmodel import SQLModel, Field
-from typing import Optional
-from datetime import datetime, timezone
+from typing import Optional, Literal
+from datetime import datetime, timezone, timedelta
 
 
 # User, Document
@@ -75,3 +75,19 @@ class AIInteraction(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     reviewed_at: Optional[datetime] = None
+
+
+class DocumentSharingLinks(SQLModel, table = True):
+    __tablename__ = "document_share_links"
+    id: Optional[int] = Field(default=None, primary_key=True) 
+
+    document_id: int = Field(foreign_key="documents.id")
+    owner_id: int = Field(foreign_key="users.id")
+    token: str = Field(index=True, unique=True)
+
+    role: str
+    login_required: bool
+    multi_use: bool
+    is_active: bool = True
+    use_count: int = 0
+    expiry: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(hours=24))

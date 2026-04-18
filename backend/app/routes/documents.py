@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from sqlmodel import Session, select
 
 from app.access import get_document_role, require_document_owner, require_document_role
 from app.auth import CurrentUser
 from app.db import get_session
-from app.models import Document, DocumentPermission, DocumentVersion, User
+from app.models import Document, DocumentPermission, DocumentVersion, User, DocumentSharingLinks
 from app.schemas import (
     DocumentBootstrapDocumentApi,
     DocumentBootstrapResponse,
@@ -21,7 +21,11 @@ from app.schemas import (
     DocumentVersionCreatedByApi,
     DocumentVersionResponse,
     DocumentVersionsResponse,
+    ShareLinkCreate,
+    ShareLinkRead,
+    ShareLinkWithUrlRead
 )
+import secrets
 
 router = APIRouter(tags=["documents"])
 
@@ -370,3 +374,141 @@ def restore_document_version(
 
     owner = session.get(User, document.owner_id)
     return serialize_document(document, owner, role)
+
+
+@router.post(
+    "/share/{document_id}",
+    response_model=ShareLinkWithUrlRead,
+    status_code=status.HTTP_201_CREATED
+)
+def share_this_document_via_link(
+    document_id: int,
+    share_data: ShareLinkCreate,
+    request: Request,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+    
+):
+    document = session.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    owner = session.get(User, document.owner_id)
+    if current_user.id != owner.id:
+        raise HTTPException(status_code=403, detail="You must have owner role to share this document")
+    token = secrets.token_urlsafe(32)
+
+    share_link = DocumentSharingLinks(
+        document_id=document_id,
+        owner_id=current_user.id,
+        token=token,
+        role=share_data.role,
+        login_required=share_data.login_required,
+        multi_use=share_data.multi_use,
+    )
+
+    session.add(share_link)
+    session.commit()
+    session.refresh(share_link)
+
+    link_info = ShareLinkRead(
+        id=share_link.id,
+        login_required=share_link.login_required,
+        owner_id=share_link.owner_id,
+        token=share_link.token,
+        role=share_link.role,
+        multi_use=share_link.multi_use,
+        expiry=share_link.expiry,
+        is_active=share_link.is_active,
+    )
+    share_url = f"{request.base_url}share/{token}"
+    payload = ShareLinkWithUrlRead(info=link_info, final_url=share_url)
+    return payload
+
+@router.get("/share/{token}")
+def open_share_link(
+    token: str,
+    session: Session = Depends(get_session),
+):
+    link_task = session.exec(
+        select(DocumentSharingLinks).where(DocumentSharingLinks.token == token)
+    ).first()
+
+    if not link_task:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    now = datetime.now(timezone.utc)
+
+    if not link_task.is_active:
+        raise HTTPException(status_code=403, detail="Share link is no longer active")
+
+    if link_task.expiry and link_task.expiry.replace(tzinfo=timezone.utc) < now:
+        raise HTTPException(status_code=403, detail="Share link has expired")
+
+    return {
+        "message": "Share link is valid",
+        "document_id": link_task.document_id,
+        "role": link_task.role,
+        "login_required": link_task.login_required,
+        "multi_use": link_task.multi_use,
+        "token": link_task.token,
+    }
+
+@router.post("/share/{token}/accept")
+def accept_share_link(
+    token: str,
+    current_user: CurrentUser,
+    session: Session = Depends(get_session),
+):
+    link_task = session.exec(
+        select(DocumentSharingLinks).where(DocumentSharingLinks.token == token)
+    ).first()
+
+    if not link_task:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    now = datetime.now(timezone.utc)
+
+    if not link_task.is_active:
+        raise HTTPException(status_code=403, detail="Share link is no longer active")
+
+    if link_task.expiry and link_task.expiry.replace(tzinfo=timezone.utc) < now:
+        raise HTTPException(status_code=403, detail="Share link has expired")
+
+    if current_user.id == link_task.owner_id:
+        return {
+            "message": "You already own this document",
+            "document_id": link_task.document_id,
+            "role": "owner",
+        }
+
+    existing_permission = session.exec(
+        select(DocumentPermission).where(
+            DocumentPermission.document_id == link_task.document_id,
+            DocumentPermission.user_id == current_user.id,
+        )
+    ).first()
+
+    if existing_permission:
+        existing_permission.permission = link_task.role
+        session.add(existing_permission)
+    else:
+        new_permission = DocumentPermission(
+            document_id=link_task.document_id,
+            user_id=current_user.id,
+            permission=link_task.role,
+        )
+        session.add(new_permission)
+
+    link_task.use_count += 1
+
+    if not link_task.multi_use:
+        link_task.is_active = False
+
+    session.add(link_task)
+    session.commit()
+
+    return {
+        "message": "Access granted successfully",
+        "document_id": link_task.document_id,
+        "role": link_task.role,
+    }

@@ -22,6 +22,7 @@ def create_db_and_tables():
     _ensure_user_is_admin_column()
     _ensure_ai_interaction_columns()
     _ensure_document_version_columns()
+    _ensure_document_share_link_columns()
 
 
 def _ensure_user_is_admin_column():
@@ -85,6 +86,28 @@ def _ensure_document_version_columns():
                 connection.execute(text(statement))
 
 
+def _ensure_document_share_link_columns():
+    inspector = inspect(engine)
+    if "document_share_links" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("document_share_links")
+    }
+    desired_columns = {
+        "token": "ALTER TABLE document_share_links ADD COLUMN token VARCHAR DEFAULT ''",
+        "role": "ALTER TABLE document_share_links ADD COLUMN role VARCHAR DEFAULT 'viewer'",
+        "login_required": "ALTER TABLE document_share_links ADD COLUMN login_required INTEGER DEFAULT 1",
+        "multi_use": "ALTER TABLE document_share_links ADD COLUMN multi_use INTEGER DEFAULT 0",
+        "is_active": "ALTER TABLE document_share_links ADD COLUMN is_active INTEGER DEFAULT 1",
+        "use_count": "ALTER TABLE document_share_links ADD COLUMN use_count INTEGER DEFAULT 0",
+        "expiry": "ALTER TABLE document_share_links ADD COLUMN expiry TIMESTAMP",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in desired_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(text(statement))
 def _hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
