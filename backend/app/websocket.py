@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import jwt
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.collab import CollaborativeDocument
+from app.config import JWT_ALGORITHM, JWT_SECRET_KEY
 
 router = APIRouter()
 
@@ -90,7 +92,19 @@ def _prune_room(room_id: str) -> None:
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket) -> None:
+async def websocket_endpoint(
+    websocket: WebSocket, token: str | None = Query(default=None)
+) -> None:
+    # Try to validate token, but DO NOT block connection
+    username = None
+
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            username = payload.get("sub")
+        except Exception:
+            print("Invalid WebSocket token, allowing connection anyway")
+
     await websocket.accept()
     client_id: str | None = None
     room_id: str | None = None
@@ -100,6 +114,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             message = await websocket.receive_json()
             message_type = message.get("type")
 
+            # First message from a client should join a room.
             if message_type == "join":
                 room_id = str(message.get("roomId", ""))
                 client_id = str(message.get("clientId", ""))
@@ -114,10 +129,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 room = _ensure_room(room_id, message.get("document"))
                 room.connections[client_id] = Connection(
-                    websocket=websocket, client_id=client_id, user=user
+                    websocket=websocket,
+                    client_id=client_id,
+                    user=user,
                 )
                 connection_rooms[websocket] = room_id
 
+                # Send current room state to the newly joined client.
                 await send_message(
                     websocket,
                     {
@@ -129,6 +147,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     },
                 )
 
+                # Notify everyone else in the room that a user joined.
                 await broadcast(
                     room,
                     {
@@ -142,6 +161,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
+            # Block all other actions until the client joins a room.
             if not room_id or not client_id:
                 await send_message(
                     websocket,
@@ -152,10 +172,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             room = rooms.get(room_id)
             if not room:
                 await send_message(
-                    websocket, {"type": "error", "message": "Room not found."}
+                    websocket,
+                    {"type": "error", "message": "Room not found."},
                 )
                 continue
 
+            # Apply collaborative operations and broadcast them to other users.
             if message_type == "operations":
                 operations = message.get("operations")
                 if not isinstance(operations, dict):
@@ -180,6 +202,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
+            # Update cursor / activity awareness for other collaborators.
             if message_type == "awareness":
                 awareness = message.get("awareness")
                 if not isinstance(awareness, dict):
@@ -192,7 +215,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 connection = room.connections.get(client_id)
                 if not connection:
                     await send_message(
-                        websocket, {"type": "error", "message": "Connection not found."}
+                        websocket,
+                        {"type": "error", "message": "Connection not found."},
                     )
                     continue
 
@@ -216,6 +240,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
+            # Client is leaving the room intentionally.
             if message_type == "leave":
                 break
 
