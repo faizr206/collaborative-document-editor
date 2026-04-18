@@ -18,7 +18,7 @@ from app.schemas import (
     AdminDocumentRoleItem,
 )
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 @router.get("/check_all_users", response_model=AdminUsersResponse)

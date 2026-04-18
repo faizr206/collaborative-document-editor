@@ -22,7 +22,6 @@ from app.schemas import (
 
 router = APIRouter(tags=["permissions"])
 
-LEGACY_BASE = "/api/permissions"
 V1_BASE = "/api/v1/documents"
 
 
@@ -58,7 +57,7 @@ def _serialize_document_members(
     )
 
 
-@router.get(f"{LEGACY_BASE}/my", response_model=UserPermissionsResponse)
+@router.get("/api/v1/permissions/my", response_model=UserPermissionsResponse)
 def get_user_permissions(
     current_user: CurrentUser,
     session: Session = Depends(get_session),
@@ -80,10 +79,6 @@ def get_user_permissions(
     return UserPermissionsResponse(documents=items)
 
 
-@router.get(
-    f"{LEGACY_BASE}/documents/{{document_id}}",
-    response_model=DocumentPermissionsResponse,
-)
 @router.get(
     f"{V1_BASE}/{{document_id}}/members",
     response_model=DocumentPermissionsResponse,
@@ -113,11 +108,6 @@ def get_document_permissions(
     )
 
 
-@router.post(
-    f"{LEGACY_BASE}/documents/{{document_id}}/members",
-    response_model=DocumentUserPermission,
-    status_code=status.HTTP_201_CREATED,
-)
 @router.post(
     f"{V1_BASE}/{{document_id}}/members",
     response_model=DocumentUserPermission,
@@ -165,10 +155,6 @@ def grant_permission(
 
 
 @router.patch(
-    f"{LEGACY_BASE}/documents/{{document_id}}/members/{{user_id}}",
-    response_model=DocumentUserPermission,
-)
-@router.patch(
     f"{V1_BASE}/{{document_id}}/members/{{user_id}}",
     response_model=DocumentUserPermission,
 )
@@ -207,10 +193,6 @@ def update_member_role(
     )
 
 
-@router.delete(
-    f"{LEGACY_BASE}/documents/{{document_id}}/members/{{user_id}}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
 @router.delete(
     f"{V1_BASE}/{{document_id}}/members/{{user_id}}",
     status_code=status.HTTP_204_NO_CONTENT,

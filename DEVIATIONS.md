@@ -7,6 +7,9 @@ This file records the current gap between the assignment design in `guidelines/f
 - `/api/v1` routes are now available for auth, documents, sharing, bootstrap, and versioning.
   Reason: this was mostly a routing and client-update task, so it was low effort and safe to add without changing the architecture.
 
+- The backend now uses `/api/v1` consistently for auth, documents, sharing, AI, and admin routes.
+  Reason: the route migration was mostly mechanical once the frontend and tests were already using versioned endpoints in several places.
+
 - `POST /api/v1/auth/logout` now exists.
   Reason: the app already uses client-side token storage, so adding a lightweight logout endpoint was straightforward.
 
@@ -55,7 +58,7 @@ The current editor autosave flow depends on REST persistence for document conten
 - The assignment describes:
   - `POST /api/v1/documents/{documentId}/ai/requests`
   - `GET /api/v1/documents/{documentId}/ai/requests/{requestId}`
-- The implementation still uses global AI routes under `/api/ai/*`.
+- The implementation now uses `/api/v1/ai/*`, but it is still a global AI route surface rather than document-scoped request resources.
 
 Reason:
 The AI feature set is already working and tested through the current routes. Reworking it into a document-scoped request lifecycle would touch the frontend AI client, backend route structure, and possibly the streaming flow. For a small-scale project, the existing global routes are sufficient.

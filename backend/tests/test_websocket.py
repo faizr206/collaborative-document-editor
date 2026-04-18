@@ -22,7 +22,7 @@ def create_authenticated_user() -> dict[str, str | int]:
     password = "secret123"
 
     register_response = client.post(
-        "/user_auth/register",
+        "/api/v1/auth/register",
         json={
             "username": username,
             "email": f"{username}@example.com",
@@ -32,7 +32,7 @@ def create_authenticated_user() -> dict[str, str | int]:
     assert register_response.status_code == 201
 
     login_response = client.post(
-        "/user_auth/login",
+        "/api/v1/auth/login",
         json={"username": username, "password": password},
     )
     assert login_response.status_code == 200
@@ -73,7 +73,7 @@ def get_collab_token(document_id: int, access_token: str) -> str:
 
 def share_document(document_id: int, owner_token: str, identifier: str, role: str) -> None:
     response = client.post(
-        f"/api/permissions/documents/{document_id}/members",
+        f"/api/v1/documents/{document_id}/members",
         headers={"Authorization": f"Bearer {owner_token}"},
         json={"identifier": identifier, "role": role},
     )

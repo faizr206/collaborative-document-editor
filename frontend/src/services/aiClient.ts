@@ -250,7 +250,7 @@ export const aiClient = {
 
     const done = (async () => {
       const accessToken = getAccessToken();
-      const response = await fetch(`${API_BASE_URL}/api/ai/stream`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai/stream`, {
         method: "POST",
         signal: controller.signal,
         headers: {
@@ -285,7 +285,7 @@ export const aiClient = {
       async cancel() {
         if (requestId) {
           try {
-            await requestJson(`/api/ai/cancel/${requestId}`, {
+            await requestJson(`/api/v1/ai/cancel/${requestId}`, {
               method: "POST"
             });
           } catch {
@@ -299,7 +299,9 @@ export const aiClient = {
   },
 
   async listHistory(input: { documentId: number }): Promise<AiSuggestion[]> {
-    const payload = await requestJson<BackendAiHistoryResponse>(`/api/ai/history/${input.documentId}`);
+    const payload = await requestJson<BackendAiHistoryResponse>(
+      `/api/v1/ai/history/${input.documentId}`
+    );
     return payload.data.items.map(mapInteraction);
   },
 
@@ -310,7 +312,7 @@ export const aiClient = {
     acceptedParts?: number[];
   }): Promise<AiSuggestion> {
     const payload = await requestJson<{ data: BackendAiInteraction }>(
-      `/api/ai/interactions/${input.interactionId}/review`,
+      `/api/v1/ai/interactions/${input.interactionId}/review`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -325,13 +327,16 @@ export const aiClient = {
   },
 
   async previewPartialAcceptance(input: { suggestion: string; acceptedParts: number[] }) {
-    const payload = await requestJson<PartialAcceptanceResponse>("/api/ai/partial-accept", {
+    const payload = await requestJson<PartialAcceptanceResponse>(
+      "/api/v1/ai/partial-accept",
+      {
       method: "POST",
       body: JSON.stringify({
         suggestion: input.suggestion,
         accepted_parts: input.acceptedParts
       })
-    });
+      }
+    );
 
     return payload.data;
   }
