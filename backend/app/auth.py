@@ -1,6 +1,6 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from typing import Annotated, Any
 
 import jwt
 from fastapi import Depends, HTTPException
@@ -15,6 +15,7 @@ from app.models import User
 # JWT configuration (same used everywhere in backend)
 SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = JWT_ALGORITHM
+COLLAB_TOKEN_EXPIRY_SECONDS = min(TOKEN_EXPIRY_SECONDS, 5 * 60)
 
 # This handles Authorization: Bearer <token> from HTTP requests
 security = HTTPBearer()
@@ -54,18 +55,52 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+def _encode_token(payload: dict[str, Any], expires_in_seconds: int) -> str:
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(seconds=expires_in_seconds)
+    return jwt.encode(
+        {
+            **payload,
+            "exp": expire,
+            "iat": now,
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+
 # Create JWT token when user logs in
 def create_access_token(username: str) -> str:
-    now = datetime.now(timezone.utc)
-    expire = now + timedelta(seconds=TOKEN_EXPIRY_SECONDS)
+    return _encode_token(
+        {
+            "sub": username,
+            "type": "access",
+        },
+        TOKEN_EXPIRY_SECONDS,
+    )
 
-    # payload contains:
-    # - sub: username
-    # - exp: expiry time
-    # - iat: issued time
-    payload = {"sub": username, "exp": expire, "iat": now}
 
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+def create_collab_token(
+    *,
+    user_id: int,
+    username: str,
+    document_id: int,
+    room_id: str,
+) -> str:
+    return _encode_token(
+        {
+            "sub": username,
+            "uid": user_id,
+            "doc": document_id,
+            "roomId": room_id,
+            "type": "collab",
+        },
+        COLLAB_TOKEN_EXPIRY_SECONDS,
+    )
+
+
+def decode_token(token: str) -> dict[str, Any]:
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
 
 # Verify token for protected routes
@@ -76,8 +111,10 @@ async def verify_token(
     token = credentials.credentials
 
     try:
-        # decode JWT token
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token)
+        token_type = payload.get("type")
+        if token_type not in {None, "access"}:
+            raise HTTPException(status_code=401, detail="Invalid token")
         username = payload.get("sub")
 
         if not username:

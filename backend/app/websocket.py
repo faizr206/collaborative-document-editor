@@ -4,10 +4,21 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlmodel import Session
 
+from app.access import require_document_role
+from app.auth import decode_token
 from app.collab import CollaborativeDocument
-from app.config import JWT_ALGORITHM, JWT_SECRET_KEY
+from app.db import engine
+from app.models import User
 
 router = APIRouter()
 
@@ -16,6 +27,8 @@ router = APIRouter()
 class Connection:
     websocket: WebSocket
     client_id: str
+    user_id: int
+    role: str
     user: dict[str, Any]
     awareness: dict[str, Any] = field(default_factory=dict)
 
@@ -91,19 +104,74 @@ def _prune_room(room_id: str) -> None:
         rooms.pop(room_id, None)
 
 
+def _build_presence_user(
+    authenticated_user: User, requested_user: dict[str, Any] | None
+) -> dict[str, Any]:
+    color = requested_user.get("color") if isinstance(requested_user, dict) else None
+    initials = (
+        requested_user.get("initials") if isinstance(requested_user, dict) else None
+    )
+
+    return {
+        "userId": str(authenticated_user.id),
+        "displayName": authenticated_user.username,
+        "color": color if isinstance(color, str) and color else "#295eff",
+        "initials": initials if isinstance(initials, str) and initials else authenticated_user.username[:2].upper(),
+        "active": True,
+        "isSelf": True,
+    }
+
+
+def _authenticate_websocket(token: str | None) -> tuple[User, int, str, str]:
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing websocket token")
+
+    try:
+        payload = decode_token(token)
+    except jwt.ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="Websocket token expired") from exc
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="Invalid websocket token") from exc
+
+    if payload.get("type") != "collab":
+        raise HTTPException(status_code=401, detail="Invalid websocket token")
+
+    user_id = payload.get("uid")
+    document_id = payload.get("doc")
+    room_id = payload.get("roomId")
+    username = payload.get("sub")
+
+    if (
+        not isinstance(user_id, int)
+        or not isinstance(document_id, int)
+        or not isinstance(room_id, str)
+        or not room_id
+        or not isinstance(username, str)
+        or not username
+    ):
+        raise HTTPException(status_code=401, detail="Invalid websocket token")
+
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if user is None or user.username != username:
+            raise HTTPException(status_code=401, detail="Invalid websocket token")
+
+        _, role = require_document_role(session, document_id, user.id, "viewer")
+
+    return user, document_id, room_id, role
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket, token: str | None = Query(default=None)
 ) -> None:
-    # Try to validate token, but DO NOT block connection
-    username = None
-
-    if token:
-        try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-            username = payload.get("sub")
-        except Exception:
-            print("Invalid WebSocket token, allowing connection anyway")
+    try:
+        authenticated_user, document_id, expected_room_id, document_role = (
+            _authenticate_websocket(token)
+        )
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
     await websocket.accept()
     client_id: str | None = None
@@ -118,19 +186,28 @@ async def websocket_endpoint(
             if message_type == "join":
                 room_id = str(message.get("roomId", ""))
                 client_id = str(message.get("clientId", ""))
-                user = message.get("user")
+                requested_user = message.get("user")
 
-                if not room_id or not client_id or not isinstance(user, dict):
+                if (
+                    not room_id
+                    or not client_id
+                    or room_id != expected_room_id
+                    or not isinstance(requested_user, dict)
+                ):
                     await send_message(
                         websocket,
                         {"type": "error", "message": "Invalid join payload."},
                     )
-                    continue
+                    break
+
+                user = _build_presence_user(authenticated_user, requested_user)
 
                 room = _ensure_room(room_id, message.get("document"))
                 room.connections[client_id] = Connection(
                     websocket=websocket,
                     client_id=client_id,
+                    user_id=authenticated_user.id,
+                    role=document_role,
                     user=user,
                 )
                 connection_rooms[websocket] = room_id
@@ -179,6 +256,24 @@ async def websocket_endpoint(
 
             # Apply collaborative operations and broadcast them to other users.
             if message_type == "operations":
+                connection = room.connections.get(client_id)
+                if not connection:
+                    await send_message(
+                        websocket,
+                        {"type": "error", "message": "Connection not found."},
+                    )
+                    continue
+
+                if connection.role == "viewer":
+                    await send_message(
+                        websocket,
+                        {
+                            "type": "error",
+                            "message": "You do not have permission to edit this document.",
+                        },
+                    )
+                    continue
+
                 operations = message.get("operations")
                 if not isinstance(operations, dict):
                     await send_message(
@@ -194,7 +289,7 @@ async def websocket_endpoint(
                         "type": "operations",
                         "roomId": room_id,
                         "clientId": client_id,
-                        "user": _serialize_connection_user(room.connections[client_id]),
+                        "user": _serialize_connection_user(connection),
                         "operations": operations,
                         "document": room.document.plain_text(),
                     },

@@ -244,6 +244,8 @@ def test_v1_document_routes_support_bootstrap_and_patch_update():
     assert bootstrap_payload["document"]["id"] == document_id
     assert bootstrap_payload["collab"]["roomId"] == f"doc_{document_id}"
     assert bootstrap_payload["collab"]["websocketUrl"] == "/ws"
+    assert isinstance(bootstrap_payload["collab"]["token"], str)
+    assert bootstrap_payload["collab"]["token"]
 
     patch_response = client.patch(
         f"/api/v1/documents/{document_id}",

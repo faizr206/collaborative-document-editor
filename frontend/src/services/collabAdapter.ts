@@ -183,20 +183,10 @@ export const collabAdapter: CollabAdapter = {
       }
 
       emitSnapshot(socket ? "reconnecting" : "connecting");
-
-      const rawSession =
-        localStorage.getItem("frontend-session") ||
-        sessionStorage.getItem("frontend-session");
-
-      let token = "";
-
-      if (rawSession) {
-        try {
-          const parsedSession = JSON.parse(rawSession);
-          token = parsedSession?.accessToken ?? "";
-        } catch {
-          token = "";
-        }
+      const token = bootstrap.collab.token;
+      if (!token) {
+        emitSnapshot("error");
+        return;
       }
 
       const separator = bootstrap.collab.websocketUrl.includes("?") ? "&" : "?";
