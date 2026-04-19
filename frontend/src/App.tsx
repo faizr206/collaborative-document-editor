@@ -7,32 +7,39 @@ import { DocumentsDashboardPage } from "./features/documents/DocumentsDashboardP
 import { DocumentWorkspacePage } from "./features/editor/DocumentWorkspacePage";
 import { DocumentSettingsPage } from "./features/settings/DocumentSettingsPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
+import { ShareLinkPage } from "./features/settings/ShareLinkPage";
+import { getPendingShareToken } from "./features/settings/shareLinkStorage";
 
 function AppContent() {
   const route = useRoute();
   const { session, isBootstrapping } = useSession();
   const isAuthRoute = route.name === "login" || route.name === "register";
+  const isPublicRoute = isAuthRoute || route.name === "share";
 
   useEffect(() => {
     if (isBootstrapping) {
       return;
     }
 
-    if (!session && !isAuthRoute) {
+    if (!session && !isPublicRoute) {
       navigate("/login", { replace: true });
       return;
     }
 
-    if (session && isAuthRoute) {
+    if (session && isAuthRoute && !getPendingShareToken()) {
       navigate("/documents", { replace: true });
     }
-  }, [isAuthRoute, isBootstrapping, session]);
+  }, [isAuthRoute, isBootstrapping, isPublicRoute, session]);
 
   if (isBootstrapping) {
     return <main className="auth-page">Loading workspace...</main>;
   }
 
   if (!session) {
+    if (route.name === "share") {
+      return <ShareLinkPage token={route.token} />;
+    }
+
     return <AuthPage mode={route.name === "register" ? "register" : "login"} />;
   }
 
@@ -47,6 +54,9 @@ function AppContent() {
       break;
     case "profile":
       page = <ProfilePage />;
+      break;
+    case "share":
+      page = <ShareLinkPage token={route.token} />;
       break;
     default:
       page = <DocumentsDashboardPage />;

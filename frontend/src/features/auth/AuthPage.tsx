@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { navigate } from "../../app/navigation";
 import { useSession } from "../../app/session";
+import { consumePendingShareToken } from "../settings/shareLinkStorage";
 
 type AuthPageProps = {
   mode: "login" | "register";
@@ -25,7 +26,8 @@ export function AuthPage({ mode }: AuthPageProps) {
         await register({ username: username.trim(), email: email.trim(), password });
       }
 
-      navigate("/documents", { replace: true });
+      const pendingShareToken = consumePendingShareToken();
+      navigate(pendingShareToken ? `/share/${pendingShareToken}` : "/documents", { replace: true });
     } finally {
       setBusy(false);
     }
