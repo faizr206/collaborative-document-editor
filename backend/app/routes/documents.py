@@ -402,7 +402,6 @@ def share_this_document_via_link(
         owner_id=current_user.id,
         token=token,
         role=share_data.role,
-        login_required=share_data.login_required,
         multi_use=share_data.multi_use,
     )
 
@@ -412,7 +411,6 @@ def share_this_document_via_link(
 
     link_info = ShareLinkRead(
         id=share_link.id,
-        login_required=share_link.login_required,
         owner_id=share_link.owner_id,
         token=share_link.token,
         role=share_link.role,
@@ -427,6 +425,7 @@ def share_this_document_via_link(
 @router.get("/share/{token}")
 def open_share_link(
     token: str,
+    current_user: CurrentUser,
     session: Session = Depends(get_session),
 ):
     link_task = session.exec(
@@ -448,10 +447,10 @@ def open_share_link(
         "message": "Share link is valid",
         "document_id": link_task.document_id,
         "role": link_task.role,
-        "login_required": link_task.login_required,
         "multi_use": link_task.multi_use,
         "token": link_task.token,
     }
+
 
 @router.post("/share/{token}/accept")
 def accept_share_link(
@@ -512,3 +511,4 @@ def accept_share_link(
         "document_id": link_task.document_id,
         "role": link_task.role,
     }
+#L66OZeo0bzEyYmnYj7GRkwkLn-zR5vdMzuYt2senqcs
