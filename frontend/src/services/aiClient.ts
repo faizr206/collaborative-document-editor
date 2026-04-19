@@ -1,5 +1,4 @@
-import { getAccessToken } from "../api/auth";
-import { API_BASE_URL } from "../config";
+import { authorizedFetch } from "../api/auth";
 import type { AiActionType, AiReviewStatus, AiSuggestion, AiSuggestionPart } from "../lib/types";
 
 type ApiErrorEnvelope = {
@@ -86,14 +85,12 @@ export type AiStreamHandle = {
 };
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const accessToken = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authorizedFetch(path, {
+    ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers ?? {})
-    },
-    ...init
+    }
   });
 
   if (!response.ok) {
@@ -249,24 +246,25 @@ export const aiClient = {
     let requestId: string | null = null;
 
     const done = (async () => {
-      const accessToken = getAccessToken();
-      const response = await fetch(`${API_BASE_URL}/api/ai/stream`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
-        },
-        body: JSON.stringify({
-          action_type: input.type,
-          source_text: input.sourceText,
-          context: input.contextText ?? "",
-          instruction: input.instruction ?? "",
-          document_id: input.documentId,
-          document_content: input.documentContent,
-          options: {}
-        })
-      });
+      const response = await authorizedFetch(
+        "/api/ai/stream",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action_type: input.type,
+            source_text: input.sourceText,
+            context: input.contextText ?? "",
+            instruction: input.instruction ?? "",
+            document_id: input.documentId,
+            document_content: input.documentContent,
+            options: {}
+          })
+        }
+      );
 
       if (!response.ok) {
         throw new Error(await extractErrorMessage(response));

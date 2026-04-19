@@ -12,6 +12,7 @@ type ApiErrorEnvelope = {
 
 type LoginResponse = {
   access_token: string;
+  refresh_token: string;
   token_type: string;
   expires_in: number;
 };
@@ -21,6 +22,7 @@ export type AuthSession = {
   username: string;
   email?: string | null;
   accessToken: string;
+  refreshToken: string;
   tokenType: string;
   expiresIn: number;
 };
@@ -44,6 +46,8 @@ export type RegisterInput = {
   email: string;
   password: string;
 };
+
+let refreshPromise: Promise<AuthSession | null> | null = null;
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -101,6 +105,84 @@ export function getAccessToken(): string | null {
   return getStoredSession()?.accessToken ?? null;
 }
 
+export function getRefreshToken(): string | null {
+  return getStoredSession()?.refreshToken ?? null;
+}
+
+async function refreshAccessToken(): Promise<AuthSession | null> {
+  const existing = getStoredSession();
+  if (!existing?.refreshToken) {
+    clearStoredSession();
+    return null;
+  }
+
+  const response = await requestJson<LoginResponse>("/api/v1/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({
+      refresh_token: existing.refreshToken
+    })
+  });
+
+  const nextSession = {
+    ...existing,
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    tokenType: response.token_type,
+    expiresIn: response.expires_in
+  };
+  setStoredSession(nextSession);
+  return nextSession;
+}
+
+export async function ensureFreshSession(): Promise<AuthSession | null> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken()
+      .catch(() => {
+        clearStoredSession();
+        return null;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
+export async function authorizedFetch(
+  path: string,
+  init?: RequestInit,
+  options?: { retryOnUnauthorized?: boolean }
+): Promise<Response> {
+  const retryOnUnauthorized = options?.retryOnUnauthorized ?? true;
+  const accessToken = getAccessToken();
+  let response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(init?.headers ?? {})
+    }
+  });
+
+  if (response.status !== 401 || !retryOnUnauthorized || !getRefreshToken()) {
+    return response;
+  }
+
+  const refreshed = await ensureFreshSession();
+  if (!refreshed?.accessToken) {
+    return response;
+  }
+
+  response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${refreshed.accessToken}`,
+      ...(init?.headers ?? {})
+    }
+  });
+  return response;
+}
+
 export async function getCurrentUser(): Promise<CurrentUserResponse["user"]> {
   const accessToken = getAccessToken();
 
@@ -108,13 +190,12 @@ export async function getCurrentUser(): Promise<CurrentUserResponse["user"]> {
     throw new Error("No access token found.");
   }
 
-  const response = await requestJson<CurrentUserResponse>("/api/v1/auth/me", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    }
-  });
+  const response = await authorizedFetch("/api/v1/auth/me");
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
 
-  return response.user;
+  return ((await response.json()) as CurrentUserResponse).user;
 }
 
 export async function login(input: LoginInput): Promise<AuthSession> {
@@ -128,6 +209,7 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     username: input.username,
     email: null,
     accessToken: response.access_token,
+    refreshToken: response.refresh_token,
     tokenType: response.token_type,
     expiresIn: response.expires_in
   };

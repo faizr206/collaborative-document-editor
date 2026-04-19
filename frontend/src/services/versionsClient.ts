@@ -1,5 +1,4 @@
-import { getAccessToken } from "../api/auth";
-import { API_BASE_URL } from "../config";
+import { authorizedFetch } from "../api/auth";
 import type { DocumentVersion, SessionState } from "../lib/types";
 
 type BackendVersion = {
@@ -26,14 +25,12 @@ type BackendVersionResponse = {
 };
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const accessToken = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authorizedFetch(path, {
+    ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers ?? {})
-    },
-    ...init
+    }
   });
 
   if (!response.ok) {

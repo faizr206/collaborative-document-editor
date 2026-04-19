@@ -1,15 +1,70 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
+import pytest
+from sqlmodel import Session, delete
+from starlette.websockets import WebSocketDisconnect
 
 from app.collab import CollaborativeDocument
+from app.db import create_db_and_tables, engine
 from app.main import app
+from app.models import Document, DocumentPermission, User
 from app.websocket import connection_rooms, rooms
 
 client = TestClient(app)
 
 
 def setup_function() -> None:
+    create_db_and_tables()
+    with Session(engine) as session:
+        session.exec(delete(DocumentPermission))
+        session.exec(delete(Document))
+        session.exec(delete(User).where(User.username.like("wsuser_%")))
+        session.commit()
     rooms.clear()
     connection_rooms.clear()
+
+
+def create_websocket_auth() -> dict[str, str]:
+    suffix = uuid4().hex[:8]
+    username = f"wsuser_{suffix}"
+    password = "secret123"
+
+    register_response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": password,
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json()["access_token"]
+
+    document_response = client.post(
+        "/api/v1/documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"title": "Doc", "content": "AB"},
+    )
+    assert document_response.status_code == 201
+    document_id = document_response.json()["data"]["document"]["id"]
+
+    bootstrap_response = client.get(
+        f"/api/v1/documents/{document_id}/bootstrap",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert bootstrap_response.status_code == 200
+
+    return {
+        "room_id": bootstrap_response.json()["data"]["collab"]["roomId"],
+        "websocket_token": bootstrap_response.json()["data"]["collab"]["token"],
+    }
 
 
 def test_character_crdt_preserves_concurrent_inserts() -> None:
@@ -59,11 +114,15 @@ def test_character_crdt_preserves_insert_during_concurrent_delete() -> None:
 
 
 def test_websocket_syncs_operation_based_updates_between_clients() -> None:
-    with client.websocket_connect("/ws") as ws1:
+    auth = create_websocket_auth()
+    room_id = auth["room_id"]
+    websocket_url = f"/ws?token={auth['websocket_token']}"
+
+    with client.websocket_connect(websocket_url) as ws1:
         ws1.send_json(
             {
                 "type": "join",
-                "roomId": "doc_1",
+                "roomId": room_id,
                 "clientId": "client_1",
                 "user": {
                     "userId": "usr_1",
@@ -80,11 +139,11 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
         assert sync_1["type"] == "sync"
         assert sync_1["document"] == {"title": "Doc", "content": "AB"}
 
-        with client.websocket_connect("/ws") as ws2:
+        with client.websocket_connect(websocket_url) as ws2:
             ws2.send_json(
                 {
                     "type": "join",
-                    "roomId": "doc_1",
+                    "roomId": room_id,
                     "clientId": "client_2",
                     "user": {
                         "userId": "usr_2",
@@ -115,7 +174,7 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
             ws1.send_json(
                 {
                     "type": "operations",
-                    "roomId": "doc_1",
+                    "roomId": room_id,
                     "clientId": "client_1",
                     "operations": insert_one,
                 }
@@ -126,7 +185,7 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
             ws2.send_json(
                 {
                     "type": "operations",
-                    "roomId": "doc_1",
+                    "roomId": room_id,
                     "clientId": "client_2",
                     "operations": insert_two,
                 }
@@ -136,11 +195,11 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
             assert update_for_ws2["document"]["content"] == "A1B"
             assert update_for_ws1["document"]["content"] in {"A12B", "A21B"}
 
-            with client.websocket_connect("/ws") as ws3:
+            with client.websocket_connect(websocket_url) as ws3:
                 ws3.send_json(
                     {
                         "type": "join",
-                        "roomId": "doc_1",
+                        "roomId": room_id,
                         "clientId": "client_3",
                         "user": {
                             "userId": "usr_3",
@@ -169,11 +228,15 @@ def test_websocket_syncs_operation_based_updates_between_clients() -> None:
 
 
 def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
-    with client.websocket_connect("/ws") as ws1:
+    auth = create_websocket_auth()
+    room_id = auth["room_id"]
+    websocket_url = f"/ws?token={auth['websocket_token']}"
+
+    with client.websocket_connect(websocket_url) as ws1:
         ws1.send_json(
             {
                 "type": "join",
-                "roomId": "doc_presence",
+                "roomId": room_id,
                 "clientId": "client_1",
                 "user": {
                     "userId": "usr_1",
@@ -188,11 +251,11 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
         )
         ws1.receive_json()
 
-        with client.websocket_connect("/ws") as ws2:
+        with client.websocket_connect(websocket_url) as ws2:
             ws2.send_json(
                 {
                     "type": "join",
-                    "roomId": "doc_presence",
+                    "roomId": room_id,
                     "clientId": "client_2",
                     "user": {
                         "userId": "usr_2",
@@ -211,7 +274,7 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
             ws1.send_json(
                 {
                     "type": "awareness",
-                    "roomId": "doc_presence",
+                    "roomId": room_id,
                     "clientId": "client_1",
                     "awareness": {
                         "activity": "selecting",
@@ -242,7 +305,7 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
             ws1.send_json(
                 {
                     "type": "operations",
-                    "roomId": "doc_presence",
+                    "roomId": room_id,
                     "clientId": "client_1",
                     "operations": operations,
                 }
@@ -257,3 +320,9 @@ def test_websocket_broadcasts_cursor_and_selection_awareness() -> None:
                 "to": 5,
                 "text": "Hell",
             }
+
+
+def test_websocket_rejects_missing_token() -> None:
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws"):
+            pass

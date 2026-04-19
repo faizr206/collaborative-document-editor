@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlmodel import Session, select
 
+from app.auth import decode_token
 from app.collab import CollaborativeDocument
+from app.db import engine
+from app.models import User
 
 router = APIRouter()
 
@@ -89,8 +93,37 @@ def _prune_room(room_id: str) -> None:
         rooms.pop(room_id, None)
 
 
+def _build_authenticated_user(user: User, claimed_user: dict[str, Any] | None) -> dict[str, Any]:
+    claimed_user = claimed_user if isinstance(claimed_user, dict) else {}
+    return {
+        "userId": str(user.id),
+        "displayName": user.username,
+        "color": claimed_user.get("color", "#295eff"),
+        "initials": claimed_user.get("initials", user.username[:2].upper()),
+        "active": True,
+        "isSelf": False,
+    }
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    try:
+        username, claims = decode_token(token, expected_types={"websocket"})
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    with Session(engine) as session:
+        auth_user = session.exec(select(User).where(User.username == username)).first()
+    if auth_user is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
     client_id: str | None = None
     room_id: str | None = None
@@ -103,9 +136,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if message_type == "join":
                 room_id = str(message.get("roomId", ""))
                 client_id = str(message.get("clientId", ""))
-                user = message.get("user")
+                expected_room_id = str(claims.get("room", ""))
+                if not room_id or room_id != expected_room_id:
+                    await send_message(
+                        websocket,
+                        {"type": "error", "message": "Invalid room for websocket token."},
+                    )
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                    return
+                user = _build_authenticated_user(auth_user, message.get("user"))
 
-                if not room_id or not client_id or not isinstance(user, dict):
+                if not client_id:
                     await send_message(
                         websocket,
                         {"type": "error", "message": "Invalid join payload."},

@@ -42,8 +42,13 @@ def create_authenticated_user() -> dict[str, str]:
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
+    refresh_token = login_response.json()["refresh_token"]
 
-    return {"Authorization": f"Bearer {token}", "username": username}
+    return {
+        "Authorization": f"Bearer {token}",
+        "username": username,
+        "refresh_token": refresh_token,
+    }
 
 
 def get_user_id(username: str) -> int:
@@ -244,6 +249,7 @@ def test_v1_document_routes_support_bootstrap_and_patch_update():
     assert bootstrap_payload["document"]["id"] == document_id
     assert bootstrap_payload["collab"]["roomId"] == f"doc_{document_id}"
     assert bootstrap_payload["collab"]["websocketUrl"] == "/ws"
+    assert bootstrap_payload["collab"]["token"]
 
     patch_response = client.patch(
         f"/api/v1/documents/{document_id}",
@@ -253,6 +259,20 @@ def test_v1_document_routes_support_bootstrap_and_patch_update():
     assert patch_response.status_code == 200
     assert patch_response.json()["data"]["document"]["title"] == "Patched title"
     assert patch_response.json()["data"]["document"]["content"] == "<p>Updated</p>"
+
+
+def test_refresh_token_issues_new_access_token():
+    headers = create_authenticated_user()
+
+    refresh_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": headers["refresh_token"]},
+    )
+    assert refresh_response.status_code == 200
+    payload = refresh_response.json()
+    assert payload["access_token"]
+    assert payload["refresh_token"]
+    assert payload["token_type"] == "bearer"
 
 
 def test_v1_version_routes_create_list_and_restore_snapshots():

@@ -6,7 +6,7 @@ import {
   updateDocument,
   type DocumentDto
 } from "../api/documents";
-import { getAccessToken } from "../api/auth";
+import { authorizedFetch } from "../api/auth";
 import type {
   ConnectionIndicator,
   DocumentBootstrap,
@@ -35,11 +35,9 @@ type BootstrapResponse = {
 };
 
 async function requestJson<T>(path: string): Promise<T> {
-  const accessToken = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authorizedFetch(path, {
     headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+      "Content-Type": "application/json"
     }
   });
 
@@ -114,6 +112,13 @@ export const documentsClient = {
     const websocketUrl = payload.data.collab.websocketUrl.startsWith("ws")
       ? payload.data.collab.websocketUrl
       : `${toWebSocketUrl(API_BASE_URL)}${payload.data.collab.websocketUrl}`;
+    const authenticatedWebsocketUrl = payload.data.collab.token
+      ? (() => {
+          const url = new URL(websocketUrl);
+          url.searchParams.set("token", payload.data.collab.token);
+          return url.toString();
+        })()
+      : websocketUrl;
 
     return {
       document: {
@@ -125,7 +130,7 @@ export const documentsClient = {
       collab: {
         provider: "websocket",
         roomId: payload.data.collab.roomId,
-        websocketUrl,
+        websocketUrl: authenticatedWebsocketUrl,
         token: payload.data.collab.token
       },
       presence: {
