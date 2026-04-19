@@ -45,6 +45,7 @@ describe("authClient", () => {
       username: "alice",
       email: "alice@example.com",
       accessToken: "stale-token",
+      refreshToken: "stale-refresh",
       tokenType: "bearer",
       expiresIn: 1800
     });

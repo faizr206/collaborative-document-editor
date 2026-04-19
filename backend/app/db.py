@@ -2,7 +2,6 @@
 db.py - Database setup and connection for the collaborative document editor application.
 """
 
-import hashlib
 from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine, select
 
@@ -107,8 +106,12 @@ def _ensure_document_share_link_columns():
         for column_name, statement in desired_columns.items():
             if column_name not in existing_columns:
                 connection.execute(text(statement))
+
+
 def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    from app.auth import hash_password
+
+    return hash_password(password)
 
 
 def create_default_user():

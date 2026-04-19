@@ -2,16 +2,25 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session, delete
 from starlette.websockets import WebSocketDisconnect
 
 from app.collab import CollaborativeDocument
+from app.db import create_db_and_tables, engine
 from app.main import app
+from app.models import Document, DocumentPermission, User
 from app.websocket import connection_rooms, rooms
 
 client = TestClient(app)
 
 
 def setup_function() -> None:
+    create_db_and_tables()
+    with Session(engine) as session:
+        session.exec(delete(DocumentPermission))
+        session.exec(delete(Document))
+        session.exec(delete(User).where(User.username.like("wsuser_%")))
+        session.commit()
     rooms.clear()
     connection_rooms.clear()
 

@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from sqlmodel import Session, select
 
-from app.access import get_document_role, require_document_owner, require_document_role
 from app.auth import CurrentUser, create_collab_token
+from app.access import get_document_role, require_document_owner, require_document_role
 from app.db import get_session
 from app.models import Document, DocumentPermission, DocumentVersion, User, DocumentSharingLinks
 from app.schemas import (
@@ -511,4 +511,3 @@ def accept_share_link(
         "document_id": link_task.document_id,
         "role": link_task.role,
     }
-#L66OZeo0bzEyYmnYj7GRkwkLn-zR5vdMzuYt2senqcs

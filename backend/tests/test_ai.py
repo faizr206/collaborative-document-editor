@@ -45,6 +45,7 @@ def create_authenticated_user(client: TestClient) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {login_response.json()['access_token']}",
         "username": username,
+        "refresh_token": login_response.json()["refresh_token"],
     }
 
 

@@ -3,15 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import jwt
-from fastapi import (
-    APIRouter,
-    HTTPException,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-    status,
-)
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlmodel import Session
 
 from app.access import require_document_role
@@ -116,7 +108,9 @@ def _build_presence_user(
         "userId": str(authenticated_user.id),
         "displayName": authenticated_user.username,
         "color": color if isinstance(color, str) and color else "#295eff",
-        "initials": initials if isinstance(initials, str) and initials else authenticated_user.username[:2].upper(),
+        "initials": initials
+        if isinstance(initials, str) and initials
+        else authenticated_user.username[:2].upper(),
         "active": True,
         "isSelf": True,
     }
@@ -126,15 +120,7 @@ def _authenticate_websocket(token: str | None) -> tuple[User, int, str, str]:
     if not token:
         raise HTTPException(status_code=401, detail="Missing websocket token")
 
-    try:
-        payload = decode_token(token)
-    except jwt.ExpiredSignatureError as exc:
-        raise HTTPException(status_code=401, detail="Websocket token expired") from exc
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid websocket token") from exc
-
-    if payload.get("type") != "collab":
-        raise HTTPException(status_code=401, detail="Invalid websocket token")
+    _, payload = decode_token(token, expected_types={"collab"})
 
     user_id = payload.get("uid")
     document_id = payload.get("doc")
@@ -166,7 +152,7 @@ async def websocket_endpoint(
     websocket: WebSocket, token: str | None = Query(default=None)
 ) -> None:
     try:
-        authenticated_user, document_id, expected_room_id, document_role = (
+        authenticated_user, _document_id, expected_room_id, document_role = (
             _authenticate_websocket(token)
         )
     except HTTPException:
@@ -182,7 +168,6 @@ async def websocket_endpoint(
             message = await websocket.receive_json()
             message_type = message.get("type")
 
-            # First message from a client should join a room.
             if message_type == "join":
                 room_id = str(message.get("roomId", ""))
                 client_id = str(message.get("clientId", ""))
@@ -201,7 +186,6 @@ async def websocket_endpoint(
                     break
 
                 user = _build_presence_user(authenticated_user, requested_user)
-
                 room = _ensure_room(room_id, message.get("document"))
                 room.connections[client_id] = Connection(
                     websocket=websocket,
@@ -212,7 +196,6 @@ async def websocket_endpoint(
                 )
                 connection_rooms[websocket] = room_id
 
-                # Send current room state to the newly joined client.
                 await send_message(
                     websocket,
                     {
@@ -224,7 +207,6 @@ async def websocket_endpoint(
                     },
                 )
 
-                # Notify everyone else in the room that a user joined.
                 await broadcast(
                     room,
                     {
@@ -238,7 +220,6 @@ async def websocket_endpoint(
                 )
                 continue
 
-            # Block all other actions until the client joins a room.
             if not room_id or not client_id:
                 await send_message(
                     websocket,
@@ -254,7 +235,6 @@ async def websocket_endpoint(
                 )
                 continue
 
-            # Apply collaborative operations and broadcast them to other users.
             if message_type == "operations":
                 connection = room.connections.get(client_id)
                 if not connection:
@@ -297,7 +277,6 @@ async def websocket_endpoint(
                 )
                 continue
 
-            # Update cursor / activity awareness for other collaborators.
             if message_type == "awareness":
                 awareness = message.get("awareness")
                 if not isinstance(awareness, dict):
@@ -335,7 +314,6 @@ async def websocket_endpoint(
                 )
                 continue
 
-            # Client is leaving the room intentionally.
             if message_type == "leave":
                 break
 
