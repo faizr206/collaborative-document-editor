@@ -96,7 +96,6 @@ def _ensure_document_share_link_columns():
     desired_columns = {
         "token": "ALTER TABLE document_share_links ADD COLUMN token VARCHAR DEFAULT ''",
         "role": "ALTER TABLE document_share_links ADD COLUMN role VARCHAR DEFAULT 'viewer'",
-        "login_required": "ALTER TABLE document_share_links ADD COLUMN login_required INTEGER DEFAULT 1",
         "multi_use": "ALTER TABLE document_share_links ADD COLUMN multi_use INTEGER DEFAULT 0",
         "is_active": "ALTER TABLE document_share_links ADD COLUMN is_active INTEGER DEFAULT 1",
         "use_count": "ALTER TABLE document_share_links ADD COLUMN use_count INTEGER DEFAULT 0",

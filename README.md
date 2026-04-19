@@ -123,8 +123,7 @@ The current frontend uses the `/api/v1` namespace for:
 - sharing: `/api/v1/documents/{id}/members`
 - bootstrap: `/api/v1/documents/{id}/bootstrap`
 - versions: `/api/v1/documents/{id}/versions`
-
-AI routes are still served under `/api/ai/*`.
+- AI: `/api/v1/ai/*`
 
 ## Testing
 

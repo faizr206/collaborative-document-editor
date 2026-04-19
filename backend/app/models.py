@@ -86,7 +86,6 @@ class DocumentSharingLinks(SQLModel, table = True):
     token: str = Field(index=True, unique=True)
 
     role: str
-    login_required: bool
     multi_use: bool
     is_active: bool = True
     use_count: int = 0

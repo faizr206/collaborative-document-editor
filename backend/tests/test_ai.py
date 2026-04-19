@@ -27,7 +27,7 @@ def create_authenticated_user(client: TestClient) -> dict[str, str]:
     password = "secret123"
 
     register_response = client.post(
-        "/user_auth/register",
+        "/api/v1/auth/register",
         json={
             "username": username,
             "email": f"{username}@example.com",
@@ -37,7 +37,7 @@ def create_authenticated_user(client: TestClient) -> dict[str, str]:
     assert register_response.status_code == 201
 
     login_response = client.post(
-        "/user_auth/login",
+        "/api/v1/auth/login",
         json={"username": username, "password": password},
     )
     assert login_response.status_code == 200
@@ -51,7 +51,7 @@ def create_authenticated_user(client: TestClient) -> dict[str, str]:
 
 def create_document(client: TestClient, headers: dict[str, str]) -> int:
     response = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=headers,
         json={
             "title": "Backend AI Test",
@@ -73,7 +73,7 @@ def share_document(
     role: str,
 ):
     response = client.post(
-        f"/api/permissions/documents/{document_id}/members",
+        f"/api/v1/documents/{document_id}/members",
         headers=owner_headers,
         json={"identifier": identifier, "role": role},
     )
@@ -90,7 +90,7 @@ def test_create_ai_suggestion_and_history_for_editor():
         )
 
         response = client.post(
-            "/api/ai/suggest",
+            "/api/v1/ai/suggest",
             headers=editor_headers,
             json={
                 "action_type": "rewrite",
@@ -111,7 +111,7 @@ def test_create_ai_suggestion_and_history_for_editor():
         assert "formal" in payload["resultText"]
 
         history_response = client.get(
-            f"/api/ai/history/{document_id}", headers=editor_headers
+            f"/api/v1/ai/history/{document_id}", headers=editor_headers
         )
         assert history_response.status_code == 200
         history_items = history_response.json()["data"]["items"]
@@ -130,7 +130,7 @@ def test_stream_ai_suggestion_emits_chunk_and_complete_events():
         )
 
         response = client.post(
-            "/api/ai/stream",
+            "/api/v1/ai/stream",
             headers=editor_headers,
             json={
                 "action_type": "summarize",
@@ -163,7 +163,7 @@ def test_review_ai_interaction_updates_status():
         document_id = create_document(client, owner_headers)
 
         create_response = client.post(
-            "/api/ai/suggest",
+            "/api/v1/ai/suggest",
             headers=owner_headers,
             json={
                 "action_type": "fix_grammar",
@@ -179,7 +179,7 @@ def test_review_ai_interaction_updates_status():
         interaction_id = create_response.json()["data"]["id"]
 
         review_response = client.post(
-            f"/api/ai/interactions/{interaction_id}/review",
+            f"/api/v1/ai/interactions/{interaction_id}/review",
             headers=owner_headers,
             json={
                 "review_status": "edited",
@@ -203,7 +203,7 @@ def test_viewer_cannot_use_ai_with_direct_api_request():
         )
 
         response = client.post(
-            "/api/ai/suggest",
+            "/api/v1/ai/suggest",
             headers=viewer_headers,
             json={
                 "action_type": "rewrite",

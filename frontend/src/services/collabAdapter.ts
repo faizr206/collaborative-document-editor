@@ -91,7 +91,12 @@ type ErrorEvent = {
   message: string;
 };
 
-type CollabEvent = SyncEvent | PresenceEvent | AwarenessEvent | OperationsEvent | ErrorEvent;
+type CollabEvent =
+  | SyncEvent
+  | PresenceEvent
+  | AwarenessEvent
+  | OperationsEvent
+  | ErrorEvent;
 
 function createClientId() {
   return `client_${Math.random().toString(36).slice(2, 10)}`;
@@ -178,7 +183,16 @@ export const collabAdapter: CollabAdapter = {
       }
 
       emitSnapshot(socket ? "reconnecting" : "connecting");
-      socket = new WebSocket(bootstrap.collab.websocketUrl);
+      const token = bootstrap.collab.token;
+      if (!token) {
+        emitSnapshot("error");
+        return;
+      }
+
+      const separator = bootstrap.collab.websocketUrl.includes("?") ? "&" : "?";
+      const websocketUrl = `${bootstrap.collab.websocketUrl}${separator}token=${encodeURIComponent(token)}`;
+
+      socket = new WebSocket(websocketUrl);
 
       socket.addEventListener("open", () => {
         if (disposed) {
@@ -214,7 +228,11 @@ export const collabAdapter: CollabAdapter = {
             const current = collaborators.get(collaborator.userId);
             collaborators.set(
               collaborator.userId,
-              mergeCollaboratorState(current, normalizeCollaborator(collaborator, self.userId), undefined)
+              mergeCollaboratorState(
+                current,
+                normalizeCollaborator(collaborator, self.userId),
+                undefined
+              )
             );
           }
           collaborators.set(self.userId, {
@@ -246,7 +264,10 @@ export const collabAdapter: CollabAdapter = {
               payload.user.userId,
               mergeCollaboratorState(
                 current,
-                normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+                normalizeCollaborator(
+                  { ...payload.user, active: true },
+                  self.userId
+                ),
                 undefined
               )
             );
@@ -266,7 +287,10 @@ export const collabAdapter: CollabAdapter = {
             payload.user.userId,
             mergeCollaboratorState(
               current,
-              normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+              normalizeCollaborator(
+                { ...payload.user, active: true },
+                self.userId
+              ),
               undefined
             )
           );
@@ -285,7 +309,10 @@ export const collabAdapter: CollabAdapter = {
             payload.user.userId,
             mergeCollaboratorState(
               current,
-              normalizeCollaborator({ ...payload.user, active: true }, self.userId),
+              normalizeCollaborator(
+                { ...payload.user, active: true },
+                self.userId
+              ),
               undefined
             )
           );

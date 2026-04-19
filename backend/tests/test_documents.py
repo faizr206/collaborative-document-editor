@@ -27,7 +27,7 @@ def create_authenticated_user() -> dict[str, str]:
     password = "secret123"
 
     register_response = client.post(
-        "/user_auth/register",
+        "/api/v1/auth/register",
         json={
             "username": username,
             "email": f"{username}@example.com",
@@ -37,7 +37,7 @@ def create_authenticated_user() -> dict[str, str]:
     assert register_response.status_code == 201
 
     login_response = client.post(
-        "/user_auth/login",
+        "/api/v1/auth/login",
         json={"username": username, "password": password},
     )
     assert login_response.status_code == 200
@@ -62,7 +62,7 @@ def share_document(
     owner_headers: dict[str, str], document_id: int, identifier: str, role: str
 ):
     response = client.post(
-        f"/api/permissions/documents/{document_id}/members",
+        f"/api/v1/documents/{document_id}/members",
         headers=owner_headers,
         json={"identifier": identifier, "role": role},
     )
@@ -75,7 +75,7 @@ def test_document_updates_persist_across_reload_for_editor():
     editor_headers = create_authenticated_user()
 
     create_response = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=owner_headers,
         json={"title": "Draft", "content": "<p>Initial</p>"},
     )
@@ -85,7 +85,7 @@ def test_document_updates_persist_across_reload_for_editor():
     share_document(owner_headers, document_id, editor_headers["username"], "editor")
 
     update_response = client.put(
-        f"/api/documents/{document_id}",
+        f"/api/v1/documents/{document_id}",
         headers=editor_headers,
         json={"title": "Draft", "content": "<p>Saved body</p>"},
     )
@@ -93,7 +93,9 @@ def test_document_updates_persist_across_reload_for_editor():
     assert update_response.json()["data"]["document"]["content"] == "<p>Saved body</p>"
     assert update_response.json()["data"]["document"]["role"] == "editor"
 
-    get_response = client.get(f"/api/documents/{document_id}", headers=editor_headers)
+    get_response = client.get(
+        f"/api/v1/documents/{document_id}", headers=editor_headers
+    )
     assert get_response.status_code == 200
     payload = get_response.json()["data"]["document"]
     assert payload["title"] == "Draft"
@@ -107,7 +109,7 @@ def test_list_documents_returns_only_user_accessible_documents():
     other_headers = create_authenticated_user()
 
     owner_create = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=owner_headers,
         json={"title": "Owner Doc", "content": "<p>Owner</p>"},
     )
@@ -115,7 +117,7 @@ def test_list_documents_returns_only_user_accessible_documents():
     owner_doc_id = owner_create.json()["data"]["document"]["id"]
 
     other_create = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=other_headers,
         json={"title": "Other Doc", "content": "<p>Other</p>"},
     )
@@ -124,7 +126,7 @@ def test_list_documents_returns_only_user_accessible_documents():
 
     share_document(owner_headers, owner_doc_id, viewer_headers["username"], "viewer")
 
-    list_response = client.get("/api/documents", headers=viewer_headers)
+    list_response = client.get("/api/v1/documents", headers=viewer_headers)
     assert list_response.status_code == 200
 
     items = list_response.json()["data"]["items"]
@@ -139,7 +141,7 @@ def test_viewer_cannot_modify_document_with_direct_api_request():
     viewer_headers = create_authenticated_user()
 
     create_response = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=owner_headers,
         json={"title": "Shared Doc", "content": "<p>Original</p>"},
     )
@@ -147,7 +149,7 @@ def test_viewer_cannot_modify_document_with_direct_api_request():
     share_document(owner_headers, document_id, viewer_headers["username"], "viewer")
 
     update_response = client.put(
-        f"/api/documents/{document_id}",
+        f"/api/v1/documents/{document_id}",
         headers=viewer_headers,
         json={"title": "Tampered", "content": "<p>Blocked</p>"},
     )
@@ -161,7 +163,7 @@ def test_editor_cannot_manage_sharing_or_delete_document():
     third_headers = create_authenticated_user()
 
     create_response = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=owner_headers,
         json={"title": "Shared Doc", "content": "<p>Original</p>"},
     )
@@ -169,14 +171,14 @@ def test_editor_cannot_manage_sharing_or_delete_document():
     share_document(owner_headers, document_id, editor_headers["username"], "editor")
 
     grant_response = client.post(
-        f"/api/permissions/documents/{document_id}/members",
+        f"/api/v1/documents/{document_id}/members",
         headers=editor_headers,
         json={"identifier": third_headers["username"], "role": "viewer"},
     )
     assert grant_response.status_code == 403
 
     delete_response = client.delete(
-        f"/api/documents/{document_id}", headers=editor_headers
+        f"/api/v1/documents/{document_id}", headers=editor_headers
     )
     assert delete_response.status_code == 403
 
@@ -186,7 +188,7 @@ def test_owner_can_share_by_email_and_remove_member():
     viewer_headers = create_authenticated_user()
 
     create_response = client.post(
-        "/api/documents",
+        "/api/v1/documents",
         headers=owner_headers,
         json={"title": "Shared Doc", "content": "<p>Original</p>"},
     )
@@ -194,7 +196,7 @@ def test_owner_can_share_by_email_and_remove_member():
 
     viewer_id = get_user_id(viewer_headers["username"])
     share_response = client.post(
-        f"/api/permissions/documents/{document_id}/members",
+        f"/api/v1/documents/{document_id}/members",
         headers=owner_headers,
         json={
             "identifier": f"{viewer_headers['username']}@example.com",
@@ -205,7 +207,7 @@ def test_owner_can_share_by_email_and_remove_member():
     assert share_response.json()["permission"] == "viewer"
 
     list_response = client.get(
-        f"/api/permissions/documents/{document_id}", headers=owner_headers
+        f"/api/v1/documents/{document_id}/members", headers=owner_headers
     )
     assert list_response.status_code == 200
     users = list_response.json()["users"]
@@ -215,7 +217,7 @@ def test_owner_can_share_by_email_and_remove_member():
     )
 
     remove_response = client.delete(
-        f"/api/permissions/documents/{document_id}/members/{viewer_id}",
+        f"/api/v1/documents/{document_id}/members/{viewer_id}",
         headers=owner_headers,
     )
     assert remove_response.status_code == 204
@@ -249,6 +251,7 @@ def test_v1_document_routes_support_bootstrap_and_patch_update():
     assert bootstrap_payload["document"]["id"] == document_id
     assert bootstrap_payload["collab"]["roomId"] == f"doc_{document_id}"
     assert bootstrap_payload["collab"]["websocketUrl"] == "/ws"
+    assert isinstance(bootstrap_payload["collab"]["token"], str)
     assert bootstrap_payload["collab"]["token"]
 
     patch_response = client.patch(

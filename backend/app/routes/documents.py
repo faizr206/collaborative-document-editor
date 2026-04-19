@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from sqlmodel import Session, select
 
+from app.auth import CurrentUser, create_collab_token
 from app.access import get_document_role, require_document_owner, require_document_role
-from app.auth import CurrentUser, create_websocket_token
 from app.db import get_session
 from app.models import Document, DocumentPermission, DocumentVersion, User, DocumentSharingLinks
 from app.schemas import (
@@ -29,7 +29,6 @@ import secrets
 
 router = APIRouter(tags=["documents"])
 
-LEGACY_BASE = "/api/documents"
 V1_BASE = "/api/v1/documents"
 
 
@@ -85,7 +84,12 @@ def serialize_document_version(
     )
 
 
-def build_bootstrap_payload(document: Document, role: str) -> DocumentBootstrapResponse:
+def build_bootstrap_payload(
+    document: Document,
+    role: str,
+    *,
+    current_user: User,
+) -> DocumentBootstrapResponse:
     room_id = f"doc_{document.id}"
     return DocumentBootstrapResponse(
         data={
@@ -98,7 +102,12 @@ def build_bootstrap_payload(document: Document, role: str) -> DocumentBootstrapR
             "collab": {
                 "roomId": room_id,
                 "websocketUrl": "/ws",
-                "token": None,
+                "token": create_collab_token(
+                    user_id=current_user.id,
+                    username=current_user.username,
+                    document_id=document.id,
+                    room_id=room_id,
+                ),
             },
         }
     )
@@ -149,11 +158,6 @@ def list_document_versions_payload(
 
 
 @router.post(
-    LEGACY_BASE,
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-@router.post(
     V1_BASE,
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
@@ -184,7 +188,6 @@ def create_document(
     return serialize_document(new_doc, current_user, "owner")
 
 
-@router.get(LEGACY_BASE, response_model=DocumentListResponse)
 @router.get(V1_BASE, response_model=DocumentListResponse)
 def list_documents(
     current_user: CurrentUser,
@@ -218,7 +221,6 @@ def list_documents(
     return {"data": {"items": items}}
 
 
-@router.get(f"{LEGACY_BASE}/my/documents", response_model=DocumentListResponse)
 @router.get(f"{V1_BASE}/my/documents", response_model=DocumentListResponse)
 def list_documents_of_current_user(
     current_user: CurrentUser,
@@ -227,7 +229,6 @@ def list_documents_of_current_user(
     return list_documents(current_user=current_user, session=session)
 
 
-@router.get(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.get(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def get_document_by_id(
     document_id: int,
@@ -241,7 +242,6 @@ def get_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.put(f"{LEGACY_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.put(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 @router.patch(f"{V1_BASE}/{{document_id}}", response_model=DocumentResponse)
 def update_document_by_id(
@@ -272,7 +272,6 @@ def update_document_by_id(
     return serialize_document(document, owner, role)
 
 
-@router.delete(f"{LEGACY_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete(f"{V1_BASE}/{{document_id}}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_id(
     document_id: int,
@@ -304,11 +303,7 @@ def get_document_bootstrap(
     document, role = require_document_role(
         session, document_id, current_user.id, "viewer"
     )
-    payload = build_bootstrap_payload(document, role)
-    payload.data.collab.token = create_websocket_token(
-        current_user.username, payload.data.collab.roomId
-    )
-    return payload
+    return build_bootstrap_payload(document, role, current_user=current_user)
 
 
 @router.get(
@@ -407,7 +402,6 @@ def share_this_document_via_link(
         owner_id=current_user.id,
         token=token,
         role=share_data.role,
-        login_required=share_data.login_required,
         multi_use=share_data.multi_use,
     )
 
@@ -417,7 +411,6 @@ def share_this_document_via_link(
 
     link_info = ShareLinkRead(
         id=share_link.id,
-        login_required=share_link.login_required,
         owner_id=share_link.owner_id,
         token=share_link.token,
         role=share_link.role,
@@ -432,6 +425,7 @@ def share_this_document_via_link(
 @router.get("/share/{token}")
 def open_share_link(
     token: str,
+    current_user: CurrentUser,
     session: Session = Depends(get_session),
 ):
     link_task = session.exec(
@@ -453,10 +447,10 @@ def open_share_link(
         "message": "Share link is valid",
         "document_id": link_task.document_id,
         "role": link_task.role,
-        "login_required": link_task.login_required,
         "multi_use": link_task.multi_use,
         "token": link_task.token,
     }
+
 
 @router.post("/share/{token}/accept")
 def accept_share_link(

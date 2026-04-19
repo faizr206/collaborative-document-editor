@@ -46,7 +46,7 @@ test("shares a document with a viewer and shows read-only access", async ({ brow
   const viewerUsername = `viewer_${Date.now()}`;
   const viewerPassword = "secret123";
 
-  await request.post("http://127.0.0.1:8010/user_auth/register", {
+  await request.post("http://127.0.0.1:8010/api/v1/auth/register", {
     data: {
       username: viewerUsername,
       email: `${viewerUsername}@example.com`,

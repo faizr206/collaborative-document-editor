@@ -2,30 +2,31 @@ import base64
 import hashlib
 import hmac
 import secrets
-import jwt
-
-# from jose import jwt
 from datetime import datetime, timedelta, timezone
-from pydantic import BaseModel, Field
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Annotated
+from typing import Annotated, Any
 
+import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
-from app.db import get_session
-from app.models import User
+
 from app.config import (
     JWT_ALGORITHM,
     JWT_SECRET_KEY,
     REFRESH_TOKEN_EXPIRY_SECONDS,
     TOKEN_EXPIRY_SECONDS,
-    WEBSOCKET_TOKEN_EXPIRY_SECONDS,
 )
+from app.db import get_session
+from app.models import User
 
 SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = JWT_ALGORITHM
+COLLAB_TOKEN_EXPIRY_SECONDS = min(TOKEN_EXPIRY_SECONDS, 5 * 60)
 PBKDF2_ITERATIONS = 200_000
 PASSWORD_SCHEME = "pbkdf2_sha256"
+
+security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
@@ -59,10 +60,15 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 class UserRegister(BaseModel):
     username: str = Field(
-        min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_]+$", examples=["john_doe"]
+        min_length=3,
+        max_length=30,
+        pattern=r"^[A-Za-z0-9_]+$",
+        examples=["john_doe"],
     )
     email: str = Field(
-        ..., pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$", examples=["user@example.com"]
+        ...,
+        pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$",
+        examples=["user@example.com"],
     )
     password: str = Field(min_length=4, max_length=100)
 
@@ -83,44 +89,56 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-def _create_token(
-    username: str,
-    *,
-    expires_in: int,
-    token_type: str,
-    extra_claims: dict | None = None,
-) -> str:
+def _encode_token(payload: dict[str, Any], expires_in_seconds: int) -> str:
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(seconds=expires_in)
-
-    payload = {"sub": username, "exp": expire, "iat": now, "type": token_type}
-    if extra_claims:
-        payload.update(extra_claims)
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    expire = now + timedelta(seconds=expires_in_seconds)
+    return jwt.encode(
+        {
+            **payload,
+            "exp": expire,
+            "iat": now,
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
 
 
 def create_access_token(username: str) -> str:
-    return _create_token(
-        username,
-        expires_in=TOKEN_EXPIRY_SECONDS,
-        token_type="access",
+    return _encode_token(
+        {
+            "sub": username,
+            "type": "access",
+        },
+        TOKEN_EXPIRY_SECONDS,
     )
 
 
 def create_refresh_token(username: str) -> str:
-    return _create_token(
-        username,
-        expires_in=REFRESH_TOKEN_EXPIRY_SECONDS,
-        token_type="refresh",
+    return _encode_token(
+        {
+            "sub": username,
+            "type": "refresh",
+        },
+        REFRESH_TOKEN_EXPIRY_SECONDS,
     )
 
 
-def create_websocket_token(username: str, room_id: str) -> str:
-    return _create_token(
-        username,
-        expires_in=WEBSOCKET_TOKEN_EXPIRY_SECONDS,
-        token_type="websocket",
-        extra_claims={"room": room_id},
+def create_collab_token(
+    *,
+    user_id: int,
+    username: str,
+    document_id: int,
+    room_id: str,
+) -> str:
+    return _encode_token(
+        {
+            "sub": username,
+            "uid": user_id,
+            "doc": document_id,
+            "roomId": room_id,
+            "type": "collab",
+        },
+        COLLAB_TOKEN_EXPIRY_SECONDS,
     )
 
 
@@ -132,18 +150,15 @@ def build_token_response(username: str) -> TokenResponse:
     )
 
 
-security = HTTPBearer()
-
-
 def decode_token(
     token: str, *, expected_types: set[str] | None = None
-) -> tuple[str, dict]:
+) -> tuple[str, dict[str, Any]]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-        token_type = payload.get("type", "access")
+        token_type = payload.get("type")
 
-        if not username:
+        if not isinstance(username, str) or not username:
             raise HTTPException(status_code=401, detail="Invalid token")
         if expected_types and token_type not in expected_types:
             raise HTTPException(status_code=401, detail="Invalid token type")
@@ -151,15 +166,15 @@ def decode_token(
         return username, payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError as e:
-        print("JWT decode error:", repr(e))
+    except jwt.InvalidTokenError as exc:
+        print("JWT decode error:", repr(exc))
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def get_user_from_token(
     token: str,
-    session: Session = Depends(get_session),
-) -> tuple[User, dict]:
+    session: Session,
+) -> tuple[User, dict[str, Any]]:
     username, payload = decode_token(token, expected_types={"access"})
     found_user = session.exec(select(User).where(User.username == username)).first()
     if not found_user:
