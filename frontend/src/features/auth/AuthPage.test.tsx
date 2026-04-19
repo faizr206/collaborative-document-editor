@@ -13,6 +13,11 @@ vi.mock("../../app/session", () => ({
   useSession: () => mockUseSession()
 }));
 
+vi.mock("../settings/shareLinkStorage", () => ({
+  getPendingShareToken: vi.fn(() => null),
+  consumePendingShareToken: vi.fn(() => null)
+}));
+
 describe("AuthPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,5 +70,33 @@ describe("AuthPage", () => {
       password: "secret123"
     });
     expect(mockNavigate).toHaveBeenCalledWith("/documents", { replace: true });
+  });
+
+  it("returns to the pending share link after login", async () => {
+    const user = userEvent.setup();
+    const login = vi.fn().mockResolvedValue(undefined);
+    const clearAuthError = vi.fn();
+
+    const shareLinkStorage = await import("../settings/shareLinkStorage");
+    vi.mocked(shareLinkStorage.getPendingShareToken).mockReturnValue("share-token");
+    vi.mocked(shareLinkStorage.consumePendingShareToken).mockReturnValue("share-token");
+
+    mockUseSession.mockReturnValue({
+      login,
+      register: vi.fn(),
+      authError: null,
+      clearAuthError
+    });
+
+    render(<AuthPage mode="login" />);
+
+    expect(screen.getByText("Share invitation")).toBeInTheDocument();
+    expect(screen.getByText("Login to accept the shared document")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Username"), "alice");
+    await user.type(screen.getByLabelText("Password"), "secret123");
+    await user.click(screen.getByRole("button", { name: "Login" }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/share/share-token", { replace: true });
   });
 });

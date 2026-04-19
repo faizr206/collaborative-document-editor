@@ -128,13 +128,13 @@ export const sharingClient = {
   },
   async createShareLink(
     documentId: number,
-    input: { role: "editor" | "viewer"; loginRequired: boolean; multiUse: boolean }
+    input: { role: "editor" | "viewer"; multiUse: boolean }
   ): Promise<ShareLink> {
     const payload = await requestJson<BackendShareLinkResponse>(`/share/${documentId}`, {
       method: "POST",
       body: JSON.stringify({
         role: input.role,
-        login_required: input.loginRequired,
+        login_required: true,
         multi_use: input.multiUse
       })
     });

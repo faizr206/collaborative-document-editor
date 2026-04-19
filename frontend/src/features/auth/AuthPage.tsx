@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { navigate } from "../../app/navigation";
 import { useSession } from "../../app/session";
-import { consumePendingShareToken } from "../settings/shareLinkStorage";
+import { consumePendingShareToken, getPendingShareToken } from "../settings/shareLinkStorage";
 
 type AuthPageProps = {
   mode: "login" | "register";
@@ -9,6 +9,7 @@ type AuthPageProps = {
 
 export function AuthPage({ mode }: AuthPageProps) {
   const { login, register, authError, clearAuthError } = useSession();
+  const pendingShareToken = getPendingShareToken();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,8 +27,8 @@ export function AuthPage({ mode }: AuthPageProps) {
         await register({ username: username.trim(), email: email.trim(), password });
       }
 
-      const pendingShareToken = consumePendingShareToken();
-      navigate(pendingShareToken ? `/share/${pendingShareToken}` : "/documents", { replace: true });
+      const shareToken = consumePendingShareToken();
+      navigate(shareToken ? `/share/${shareToken}` : "/documents", { replace: true });
     } finally {
       setBusy(false);
     }
@@ -36,18 +37,35 @@ export function AuthPage({ mode }: AuthPageProps) {
   return (
     <section className="auth-page">
       <div className="auth-hero">
-        <span className="eyebrow">Frontend only</span>
-        <h1>{mode === "login" ? "Return to your workspace" : "Create a workspace-ready account"}</h1>
+        <span className="eyebrow">{pendingShareToken ? "Share invitation" : "Frontend only"}</span>
+        <h1>
+          {pendingShareToken
+            ? mode === "login"
+              ? "Login to accept the shared document"
+              : "Create an account to accept the shared document"
+            : mode === "login"
+              ? "Return to your workspace"
+              : "Create a workspace-ready account"}
+        </h1>
         <p>
-          The frontend is structured for dashboards, document settings, AI panels, and future collaboration
-          adapters without backend rewrites.
+          {pendingShareToken
+            ? "The backend now grants share-link access only to authenticated users. After sign-in, you will be returned to the invitation automatically."
+            : "The frontend is structured for dashboards, document settings, AI panels, and future collaboration adapters without backend rewrites."}
         </p>
       </div>
 
       <form className="auth-card" onSubmit={handleSubmit}>
         <div className="auth-card-header">
           <h2>{mode === "login" ? "Login" : "Register"}</h2>
-          <p>{mode === "login" ? "Use your existing credentials." : "Create an account, then land on the dashboard."}</p>
+          <p>
+            {pendingShareToken
+              ? mode === "login"
+                ? "Use your existing account to continue to the document."
+                : "Create an account, then continue to the shared document."
+              : mode === "login"
+                ? "Use your existing credentials."
+                : "Create an account, then land on the dashboard."}
+          </p>
         </div>
 
         <label className="field">

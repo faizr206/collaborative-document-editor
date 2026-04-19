@@ -14,7 +14,6 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [linkRole, setLinkRole] = useState<"editor" | "viewer">("viewer");
-  const [loginRequired, setLoginRequired] = useState(true);
   const [multiUse, setMultiUse] = useState(false);
   const [shareLink, setShareLink] = useState<ShareLink | null>(null);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<string | null>(null);
@@ -56,10 +55,10 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
   });
 
   const createLinkMutation = useMutation({
-    mutationFn: () => sharingClient.createShareLink(documentId, { role: linkRole, loginRequired, multiUse }),
+    mutationFn: () => sharingClient.createShareLink(documentId, { role: linkRole, multiUse }),
     onSuccess: (createdLink) => {
       setShareLink(createdLink);
-      setShareLinkFeedback("Share link created. Copy it and send it to collaborators.");
+      setShareLinkFeedback("Share link created. Collaborators must log in before they can accept it.");
       setActionError(null);
     },
     onError: (error) => {
@@ -142,7 +141,7 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
           <div className="sidebar-card-header">
             <div>
               <h2>Share by link</h2>
-              <p>Create a backend-issued access link with viewer or editor permissions.</p>
+              <p>Create a backend-issued access link with viewer or editor permissions. Link acceptance now requires login.</p>
             </div>
           </div>
 
@@ -158,15 +157,9 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
             </select>
           </label>
 
-          <label className="toggle-field">
-            <input
-              type="checkbox"
-              checked={loginRequired}
-              onChange={(event) => setLoginRequired(event.target.checked)}
-              disabled={!canManage || isBusy}
-            />
-            <span>Require login before accepting the link</span>
-          </label>
+          <div className="editor-banner editor-banner-success">
+            Share links now require authenticated users. Guests are redirected to login before access is granted.
+          </div>
 
           <label className="toggle-field">
             <input
@@ -205,7 +198,7 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
                 <span className={`role-badge ${shareLink.isActive ? "role-editor" : "role-viewer"}`}>
                   {shareLink.isActive ? "active" : "inactive"}
                 </span>
-                <span className="role-badge">{shareLink.loginRequired ? "login required" : "open link"}</span>
+                <span className="role-badge">login required</span>
                 <span className="role-badge">{shareLink.multiUse ? "multi use" : "single use"}</span>
               </div>
             </>

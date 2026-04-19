@@ -92,14 +92,14 @@ export function ShareLinkPage({ token }: ShareLinkPageProps) {
           <div>
             <span className="eyebrow">Share link</span>
             <h1>Document invitation</h1>
-            <p>Sign in or create an account to accept this invitation and open the document.</p>
+            <p>Share links now require authentication. Sign in or create an account to accept this invitation.</p>
           </div>
         </div>
 
         <section className="surface page-stack">
           <div className="inline-actions">
             <span className={`role-badge role-${shareLink.role}`}>{shareLink.role}</span>
-            <span className="role-badge">{shareLink.login_required ? "login required" : "open link"}</span>
+            <span className="role-badge">login required</span>
             <span className="role-badge">{shareLink.multi_use ? "multi use" : "single use"}</span>
           </div>
 
@@ -109,7 +109,7 @@ export function ShareLinkPage({ token }: ShareLinkPageProps) {
               type="button"
               onClick={() => {
                 setPendingShareToken(token);
-                navigate("/login");
+                navigate("/login", { replace: true });
               }}
             >
               Login to accept
@@ -119,7 +119,7 @@ export function ShareLinkPage({ token }: ShareLinkPageProps) {
               type="button"
               onClick={() => {
                 setPendingShareToken(token);
-                navigate("/register");
+                navigate("/register", { replace: true });
               }}
             >
               Register to accept
