@@ -217,3 +217,20 @@ class AdminDocumentItem(BaseModel):
 
 class AdminDocumentsResponse(BaseModel):
     documents: list[AdminDocumentItem]
+
+class ShareLinkCreate(BaseModel):
+    role: Literal["viewer", "editor"]
+    multi_use: bool
+
+class ShareLinkRead(BaseModel):
+    id: int
+    owner_id: int
+    role: Literal["viewer", "editor"]
+    expiry: datetime
+    is_active: bool
+    multi_use: bool
+    token: str
+
+class ShareLinkWithUrlRead(BaseModel):
+    info: ShareLinkRead
+    final_url: str
