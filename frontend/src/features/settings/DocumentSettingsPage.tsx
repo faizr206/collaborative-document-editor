@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { navigate } from "../../app/navigation";
+import type { ShareLink } from "../../lib/types";
 import { documentsClient } from "../../services/documentsClient";
 import { sharingClient } from "../../services/sharingClient";
 
@@ -12,6 +13,10 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
   const queryClient = useQueryClient();
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
+  const [linkRole, setLinkRole] = useState<"editor" | "viewer">("viewer");
+  const [multiUse, setMultiUse] = useState(false);
+  const [shareLink, setShareLink] = useState<ShareLink | null>(null);
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const documentQuery = useQuery({
@@ -49,8 +54,30 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
     }
   });
 
+  const createLinkMutation = useMutation({
+    mutationFn: () => sharingClient.createShareLink(documentId, { role: linkRole, multiUse }),
+    onSuccess: (createdLink) => {
+      setShareLink(createdLink);
+      setShareLinkFeedback("Share link created. Collaborators must log in before they can accept it.");
+      setActionError(null);
+    },
+    onError: (error) => {
+      setShareLinkFeedback(null);
+      setActionError(error instanceof Error ? error.message : "Unable to create a share link.");
+    }
+  });
+
   const canManage = documentQuery.data?.role === "owner";
-  const isBusy = inviteMutation.isPending || deleteMutation.isPending;
+  const isBusy = inviteMutation.isPending || deleteMutation.isPending || createLinkMutation.isPending;
+
+  async function copyShareLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareLinkFeedback("Share link copied to clipboard.");
+    } catch {
+      setShareLinkFeedback("Copy failed. You can still copy the link from the field below.");
+    }
+  }
 
   return (
     <section className="page-stack">
@@ -108,6 +135,76 @@ export function DocumentSettingsPage({ documentId }: DocumentSettingsPageProps) 
 
           {!canManage ? <div className="editor-banner editor-banner-warning">Only owners can change sharing or delete this document.</div> : null}
           {actionError ? <div className="editor-banner editor-banner-warning">{actionError}</div> : null}
+        </section>
+
+        <section className="surface page-stack">
+          <div className="sidebar-card-header">
+            <div>
+              <h2>Share by link</h2>
+              <p>Create a backend-issued access link with viewer or editor permissions. Link acceptance now requires login.</p>
+            </div>
+          </div>
+
+          <label className="field">
+            <span>Access level</span>
+            <select
+              value={linkRole}
+              onChange={(event) => setLinkRole(event.target.value as typeof linkRole)}
+              disabled={!canManage || isBusy}
+            >
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+            </select>
+          </label>
+
+          <div className="editor-banner editor-banner-success">
+            Share links now require authenticated users. Guests are redirected to login before access is granted.
+          </div>
+
+          <label className="toggle-field">
+            <input
+              type="checkbox"
+              checked={multiUse}
+              onChange={(event) => setMultiUse(event.target.checked)}
+              disabled={!canManage || isBusy}
+            />
+            <span>Keep link reusable after the first acceptance</span>
+          </label>
+
+          <div className="inline-actions">
+            <button
+              className="primary-action"
+              type="button"
+              disabled={!canManage || isBusy}
+              onClick={() => createLinkMutation.mutate()}
+            >
+              {createLinkMutation.isPending ? "Creating link..." : "Generate link"}
+            </button>
+            {shareLink ? (
+              <button className="secondary-action" type="button" disabled={isBusy} onClick={() => copyShareLink(shareLink.url)}>
+                Copy link
+              </button>
+            ) : null}
+          </div>
+
+          {shareLink ? (
+            <>
+              <label className="field">
+                <span>Generated link</span>
+                <input value={shareLink.url} readOnly />
+              </label>
+              <div className="inline-actions">
+                <span className={`role-badge role-${shareLink.role}`}>{shareLink.role}</span>
+                <span className={`role-badge ${shareLink.isActive ? "role-editor" : "role-viewer"}`}>
+                  {shareLink.isActive ? "active" : "inactive"}
+                </span>
+                <span className="role-badge">login required</span>
+                <span className="role-badge">{shareLink.multiUse ? "multi use" : "single use"}</span>
+              </div>
+            </>
+          ) : null}
+
+          {shareLinkFeedback ? <div className="editor-banner editor-banner-success">{shareLinkFeedback}</div> : null}
         </section>
 
         <section className="surface page-stack">

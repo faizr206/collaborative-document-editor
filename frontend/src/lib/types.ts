@@ -83,6 +83,8 @@ export type ShareLink = {
   url: string;
   isActive: boolean;
   expiresAt: string | null;
+  loginRequired: boolean;
+  multiUse: boolean;
 };
 
 export type DocumentVersion = {

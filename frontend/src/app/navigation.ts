@@ -6,6 +6,7 @@ export type RouteMatch =
   | { name: "documents" }
   | { name: "document"; documentId: number }
   | { name: "settings"; documentId: number }
+  | { name: "share"; token: string }
   | { name: "profile" };
 
 function normalize(pathname: string) {
@@ -33,6 +34,11 @@ function parseRoute(pathname: string): RouteMatch {
 
   if (path === "/profile") {
     return { name: "profile" };
+  }
+
+  const shareMatch = /^\/share\/([^/]+)$/.exec(path);
+  if (shareMatch) {
+    return { name: "share", token: decodeURIComponent(shareMatch[1]) };
   }
 
   const settingsMatch = /^\/documents\/(\d+)\/settings$/.exec(path);
