@@ -1,5 +1,5 @@
 import { authorizedFetch } from "../api/auth";
-import type { DocumentVersion, SessionState } from "../lib/types";
+import type { DocumentDetails, DocumentVersion, SessionState } from "../lib/types";
 
 type BackendVersion = {
   id: number;
@@ -21,6 +21,23 @@ type BackendVersionsResponse = {
 type BackendVersionResponse = {
   data: {
     version: BackendVersion;
+  };
+};
+
+type BackendDocumentResponse = {
+  data: {
+    document: {
+      id: number;
+      title: string;
+      content: string;
+      createdAt: string;
+      updatedAt: string;
+      role: "owner" | "editor" | "viewer";
+      owner: {
+        id: number;
+        username: string;
+      };
+    };
   };
 };
 
@@ -55,6 +72,22 @@ function mapVersion(version: BackendVersion): DocumentVersion {
   };
 }
 
+function mapDocument(document: BackendDocumentResponse["data"]["document"]): DocumentDetails {
+  return {
+    id: document.id,
+    title: document.title,
+    content: document.content,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+    role: document.role,
+    owner: {
+      id: String(document.owner.id),
+      displayName: document.owner.username
+    },
+    isAiEnabled: document.role !== "viewer"
+  };
+}
+
 export const versionsClient = {
   async list(documentId: number): Promise<DocumentVersion[]> {
     const payload = await requestJson<BackendVersionsResponse>(
@@ -71,5 +104,14 @@ export const versionsClient = {
       }
     );
     return mapVersion(payload.data.version);
+  },
+  async restore(documentId: number, versionId: string | number): Promise<DocumentDetails> {
+    const payload = await requestJson<BackendDocumentResponse>(
+      `/api/v1/documents/${documentId}/versions/${versionId}/restore`,
+      {
+        method: "POST"
+      }
+    );
+    return mapDocument(payload.data.document);
   }
 };

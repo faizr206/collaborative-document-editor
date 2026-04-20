@@ -233,6 +233,34 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     }
   });
 
+  const restoreVersionMutation = useMutation({
+    mutationFn: (version: DocumentVersion) => versionsClient.restore(documentId, version.id),
+    onSuccess: async (document, version) => {
+      const restoredDocument = {
+        title: document.title,
+        content: document.content
+      };
+
+      pendingRemoteDocumentRef.current = restoredDocument;
+      setTitle(document.title);
+      setContent(document.content);
+      setSavedSnapshot(restoredDocument);
+      setLastSavedAt(document.updatedAt);
+      setSaveState("saved");
+      setBanner(`Restored snapshot "${version.title}".`);
+      collabSubscriptionRef.current?.publishDocument(restoredDocument);
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", documentId] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", documentId, "versions"] })
+      ]);
+    },
+    onError: (error) => {
+      setBanner(error instanceof Error ? error.message : "Failed to restore snapshot.");
+    }
+  });
+
   const isDirty = title !== savedSnapshot.title || content !== savedSnapshot.content;
   const currentDocument = documentQuery.data;
   const canEdit = currentDocument ? currentDocument.role !== "viewer" : false;
@@ -1002,6 +1030,22 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
                           <span className="text-xs text-muted-foreground">{formatDateTime(version.createdAt)}</span>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">{version.title}</p>
+                        {canEdit ? (
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="rounded-full border-[#ddd7cf] bg-white px-4"
+                              type="button"
+                              onClick={() => restoreVersionMutation.mutate(version)}
+                              disabled={restoreVersionMutation.isPending}
+                            >
+                              {restoreVersionMutation.isPending && restoreVersionMutation.variables?.id === version.id
+                                ? "Restoring..."
+                                : "Restore"}
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}
