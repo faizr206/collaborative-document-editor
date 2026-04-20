@@ -112,13 +112,6 @@ export const documentsClient = {
     const websocketUrl = payload.data.collab.websocketUrl.startsWith("ws")
       ? payload.data.collab.websocketUrl
       : `${toWebSocketUrl(API_BASE_URL)}${payload.data.collab.websocketUrl}`;
-    const authenticatedWebsocketUrl = payload.data.collab.token
-      ? (() => {
-          const url = new URL(websocketUrl);
-          url.searchParams.set("token", payload.data.collab.token);
-          return url.toString();
-        })()
-      : websocketUrl;
 
     return {
       document: {
@@ -130,7 +123,7 @@ export const documentsClient = {
       collab: {
         provider: "websocket",
         roomId: payload.data.collab.roomId,
-        websocketUrl: authenticatedWebsocketUrl,
+        websocketUrl,
         token: payload.data.collab.token
       },
       presence: {
