@@ -11,6 +11,7 @@ const {
   mockExportsClient,
   mockConnect,
   mockPublishPresence,
+  mockPublishDocument,
   insertContentAt,
   editorMock
 } = vi.hoisted(() => ({
@@ -23,7 +24,8 @@ const {
   },
   mockVersionsClient: {
     list: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    restore: vi.fn()
   },
   mockAiClient: {
     streamSuggestion: vi.fn(),
@@ -36,6 +38,7 @@ const {
   },
   mockConnect: vi.fn(),
   mockPublishPresence: vi.fn(),
+  mockPublishDocument: vi.fn(),
   insertContentAt: vi.fn(),
   editorMock: {
   chain: () => ({
@@ -185,6 +188,11 @@ describe("DocumentWorkspacePage", () => {
       }
     ]);
     mockVersionsClient.create.mockResolvedValue(undefined);
+    mockVersionsClient.restore.mockResolvedValue({
+      ...documentDetails,
+      content: "<p>Initial draft</p>",
+      updatedAt: "2026-04-15T10:20:00Z"
+    });
     mockAiClient.listHistory.mockResolvedValue([]);
     mockAiClient.reviewSuggestion.mockResolvedValue(undefined);
     mockAiClient.previewPartialAcceptance.mockImplementation(
@@ -235,7 +243,7 @@ describe("DocumentWorkspacePage", () => {
       });
 
       return {
-        publishDocument: vi.fn(),
+        publishDocument: mockPublishDocument,
         publishPresence: mockPublishPresence,
         dispose: vi.fn()
       };
@@ -360,6 +368,42 @@ describe("DocumentWorkspacePage", () => {
     });
   });
 
+  it("restores a snapshot from the snapshots panel", async () => {
+    const user = userEvent.setup();
+
+    mockVersionsClient.list.mockResolvedValue([
+      {
+        id: "v1",
+        versionNumber: 2,
+        title: "Current draft",
+        createdAt: "2026-04-15T10:10:00Z",
+        createdBy: { id: "usr_1", displayName: "Alice" }
+      },
+      {
+        id: "v0",
+        versionNumber: 1,
+        title: "Initial draft",
+        createdAt: "2026-04-15T09:00:00Z",
+        createdBy: { id: "usr_1", displayName: "Alice" }
+      }
+    ]);
+
+    renderWithProviders(<DocumentWorkspacePage documentId={42} />);
+
+    await screen.findByDisplayValue("Strategy Memo");
+    const restoreButtons = await screen.findAllByRole("button", { name: "Restore" });
+    await user.click(restoreButtons[1]);
+
+    await waitFor(() => {
+      expect(mockVersionsClient.restore).toHaveBeenCalledWith(42, "v0");
+      expect(screen.getByText('Restored snapshot "Initial draft".')).toBeInTheDocument();
+      expect(mockPublishDocument).toHaveBeenCalledWith({
+        title: "Strategy Memo",
+        content: "<p>Initial draft</p>"
+      });
+    });
+  });
+
   it("renders remote collaborator activity from presence updates", async () => {
     mockConnect.mockImplementation(({ onChange }: { onChange: (value: unknown) => void }) => {
       onChange({
@@ -387,7 +431,7 @@ describe("DocumentWorkspacePage", () => {
       });
 
       return {
-        publishDocument: vi.fn(),
+        publishDocument: mockPublishDocument,
         publishPresence: mockPublishPresence,
         dispose: vi.fn()
       };
