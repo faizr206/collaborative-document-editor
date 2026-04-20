@@ -404,6 +404,86 @@ describe("DocumentWorkspacePage", () => {
     });
   });
 
+  it("clears snapshot entries when switching to a different document", async () => {
+    let resolveVersionsForSecondDoc: ((value: Array<{
+      id: string;
+      versionNumber: number;
+      title: string;
+      createdAt: string;
+      createdBy: { id: string; displayName: string } | null;
+    }>) => void) | null = null;
+
+    mockDocumentsClient.get.mockImplementation((documentId: number) =>
+      Promise.resolve({
+        ...documentDetails,
+        id: documentId,
+        title: documentId === 43 ? "Fresh document" : "Strategy Memo"
+      })
+    );
+
+    mockDocumentsClient.bootstrap.mockImplementation((documentId: number) =>
+      Promise.resolve({
+        document: {
+          id: documentId,
+          title: documentId === 43 ? "Fresh document" : "Strategy Memo",
+          role: "owner",
+          isAiEnabled: true
+        },
+        collab: {
+          provider: "websocket",
+          roomId: `doc_${documentId}`,
+          websocketUrl: "ws://127.0.0.1:8000/ws",
+          token: null
+        },
+        presence: {
+          self: {
+            userId: "usr_1",
+            displayName: "Alice",
+            color: "#295eff",
+            initials: "A",
+            active: true,
+            isSelf: true
+          }
+        }
+      })
+    );
+
+    mockVersionsClient.list.mockImplementation((documentId: number) => {
+      if (documentId === 43) {
+        return new Promise((resolve) => {
+          resolveVersionsForSecondDoc = resolve;
+        });
+      }
+
+      return Promise.resolve([
+        {
+          id: "v1",
+          versionNumber: 1,
+          title: "Initial draft",
+          createdAt: "2026-04-15T09:00:00Z",
+          createdBy: { id: "usr_1", displayName: "Alice" }
+        }
+      ]);
+    });
+
+    const { rerender } = renderWithProviders(<DocumentWorkspacePage documentId={42} />);
+
+    await screen.findByDisplayValue("Strategy Memo");
+    expect(await screen.findByText("Initial draft")).toBeInTheDocument();
+
+    rerender(<DocumentWorkspacePage documentId={43} />);
+
+    await screen.findByDisplayValue("Fresh document");
+    expect(screen.queryByText("Initial draft")).not.toBeInTheDocument();
+    expect(screen.getByText("Loading snapshots...")).toBeInTheDocument();
+
+    resolveVersionsForSecondDoc?.([]);
+
+    await waitFor(() => {
+      expect(screen.getByText("No snapshots yet. Create one to seed the version timeline.")).toBeInTheDocument();
+    });
+  });
+
   it("renders remote collaborator activity from presence updates", async () => {
     mockConnect.mockImplementation(({ onChange }: { onChange: (value: unknown) => void }) => {
       onChange({

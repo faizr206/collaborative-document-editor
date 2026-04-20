@@ -7,6 +7,21 @@ This repository contains:
 
 The implementation now exposes the main document/auth flows under `/api/v1`, while keeping some legacy routes for compatibility.
 
+## System Design
+
+
+### High-Level Architecture
+
+![High-level architecture](diagrams/highlevel-architecture.png)
+
+### Main Runtime Flow
+
+![Main runtime flow](diagrams/flow.png)
+
+### Collaboration and AI Sequence
+
+![Collaboration and AI sequence](diagrams/sequence.png)
+
 ## Prerequisites
 
 Make sure these are installed:
