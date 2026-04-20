@@ -92,6 +92,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
   const [instruction, setInstruction] = useState("");
   const [pendingAction, setPendingAction] = useState<AiActionType>("rewrite");
   const [aiDraft, setAiDraft] = useState<AiSuggestion | null>(null);
+  const [visibleVersions, setVisibleVersions] = useState<DocumentVersion[]>([]);
   const [versionPanelOpen, setVersionPanelOpen] = useState(true);
   const [aiHistoryPanelOpen, setAiHistoryPanelOpen] = useState(true);
   const [mobilePanelsOpen, setMobilePanelsOpen] = useState(false);
@@ -138,7 +139,12 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     setContent("");
     setSavedSnapshot({ title: "", content: "" });
     setSelection({ from: 0, to: 0, text: "" });
+    setVisibleVersions([]);
   }, [documentId]);
+
+  useEffect(() => {
+    setVisibleVersions(versionsQuery.data ?? []);
+  }, [documentId, versionsQuery.data]);
 
   useEffect(() => {
     if (!documentQuery.data) {
@@ -482,7 +488,7 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
     setBanner("AI suggestion applied. Undo is available until your next change.");
   }
 
-  const recentVersions = useMemo<DocumentVersion[]>(() => versionsQuery.data ?? [], [versionsQuery.data]);
+  const recentVersions = useMemo<DocumentVersion[]>(() => visibleVersions, [visibleVersions]);
   const recentAiHistory = useMemo<AiSuggestion[]>(() => aiHistoryQuery.data ?? [], [aiHistoryQuery.data]);
   const wordCount = useMemo(() => getWordCount(content), [content]);
   const documentTitle = title.trim() || documentQuery.data?.title || "Untitled document";
@@ -1018,7 +1024,11 @@ export function DocumentWorkspacePage({ documentId }: DocumentWorkspacePageProps
               </CardHeader>
               {versionPanelOpen ? (
                 <CardContent className="space-y-3 p-5 pt-0">
-                  {recentVersions.length === 0 ? (
+                  {versionsQuery.isLoading ? (
+                    <div className="rounded-2xl border border-dashed border-[#ded7cf] bg-[#fcfbf8] px-4 py-5 text-sm text-muted-foreground">
+                      Loading snapshots...
+                    </div>
+                  ) : recentVersions.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-[#ded7cf] bg-[#fcfbf8] px-4 py-5 text-sm text-muted-foreground">
                       No snapshots yet. Create one to seed the version timeline.
                     </div>
